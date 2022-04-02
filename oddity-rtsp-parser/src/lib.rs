@@ -1,44 +1,42 @@
-mod buffer;
-
 use std::collections::HashMap;
 use std::io::{Cursor, BufRead};
 
 type Result<T> = std::result::Result<T, Error>;
 
-pub enum State {
+#[derive(Clone, Copy)]
+enum State {
   Head(Head),
   Body(Body),
-  Failed(Error),
 }
 
-pub enum Head {
+#[derive(Clone, Copy)]
+enum Head {
   FirstLine,
   Header,
   Done,
 }
 
-pub enum Body {
+#[derive(Clone, Copy)]
+enum Body {
   Incomplete(usize),
   Complete,
 }
 
+#[derive(Clone, Debug)]
 pub enum Status {
   Hungry,
   HungryFor(usize),
   Done,
 }
 
-pub enum Line {
-  Complete(String),
-  Incomplete(String),
-}
-
+#[derive(Clone, Debug)]
 pub enum Version {
   V1,
   V2,
   Unknown,
 }
 
+#[derive(Clone, Debug)]
 pub enum Method {
   Describe,
   Announce,
@@ -115,17 +113,15 @@ impl Parser {
   }
 
   pub fn parse(&mut self, buffer: &[u8]) -> Result<Status> {
-    self.state = self.parse_inner(buffer);
+    self.state = self.parse_inner(buffer)?;
 
-    match self.state {
+    match &self.state {
       State::Body(Body::Complete) =>
         Ok(Status::Done),
       State::Body(Body::Incomplete(need)) =>
-        Ok(Status::HungryFor(need)),
+        Ok(Status::HungryFor(*need)),
       State::Head(_) =>
         Ok(Status::Hungry),
-      State::Failed(err) =>
-        Err(err),
     }
   }
 
@@ -138,32 +134,16 @@ impl Parser {
           self.headers,
           self.buf,
         )),
-      State::Failed(err) =>
-        Err(err),
       _ =>
         Err(Error::NotDone)
     }
   }
 
-  fn parse_inner(&mut self, buffer: &[u8]) -> State {
+  fn parse_inner(&mut self, buffer: &[u8]) -> Result<State> {
     match self.state {
       State::Head(head) => {
-        let buffer = if self.buf.len() > 0 {
-          self.buf.extend_from_slice(buffer);
-          &self.buf
-        } else {
-          buffer
-        };
-
         let (read_bytes, next_head) =
-          match self.parse_inner_head(buffer, head) {
-            Ok(parse_inner_head_result) => {
-              parse_inner_head_result
-            },
-            Err(err) => {
-              return State::Failed(err);
-            }
-          };
+          self.parse_inner_head(buffer, head)?;
 
         // TODO(gerwin) Is this correct?
         if read_bytes != 0 {
@@ -176,17 +156,15 @@ impl Parser {
 
         match next_head {
           Head::Done => {
-            match self.find_content_length() {
-              Ok(content_length) => {
+            self
+              .find_content_length()
+              .map(|content_length| {
                 let content_length_remaining = content_length - self.buf.len();
                 State::Body(Body::Incomplete(content_length_remaining))
-              },
-              Err(err) =>
-                State::Failed(err)
-            }
+              })
           },
           _ =>
-            State::Head(next_head),
+            Ok(State::Head(next_head)),
         }
       },
       State::Body(Body::Incomplete(need)) => {
@@ -194,18 +172,18 @@ impl Parser {
         let body_bytes = &buffer[..need.min(got)];
         self.buf.extend_from_slice(body_bytes);
         if got == need {
-          State::Body(Body::Complete)
+          Ok(State::Body(Body::Complete))
         } else if got < need {
-          State::Body(Body::Incomplete(need - got))
+          Ok(State::Body(Body::Incomplete(need - got)))
         } else {
-          State::Failed(Error::BodyOverflow { need, got })
+          Err(Error::BodyOverflow {
+            need: need,
+            got
+          })
         }
       },
       State::Body(Body::Complete) => {
-        State::Failed(Error::BodyAlreadyDone)
-      },
-      State::Failed(_) => {
-        State::Failed(Error::AlreadyError)
+        Err(Error::BodyAlreadyDone)
       },
     }
   }
@@ -215,11 +193,18 @@ impl Parser {
     buffer: &[u8],
     mut head: Head,
   ) -> Result<(usize, Head)> {
+    let buffer = if self.buf.len() > 0 {
+      self.buf.extend_from_slice(buffer);
+      &self.buf
+    } else {
+      buffer
+    };
+
     let mut cursor = Cursor::new(buffer);
-    let mut line = String::new();
     let mut total_read_bytes = 0;
     loop {
-      let mut read_bytes = cursor.read_line(&mut line)
+      let mut line = String::new();
+      let read_bytes = cursor.read_line(&mut line)
         .map_err(|_| Error::Encoding)?;
       if read_bytes == 0 {
         // If `read_line` returns `0`, then it means that it could
@@ -230,27 +215,32 @@ impl Parser {
       }
 
       total_read_bytes += read_bytes;
-      head = self.parse_inner_head_item(line, head)?;
+      head = Self::parse_inner_head_item(
+        &mut self.metadata,
+        &mut self.headers,
+        line,
+        head)?;
     }
 
     Ok((total_read_bytes, head))
   }
 
   fn parse_inner_head_item(
-    &mut self,
+    metadata: &mut Option<Metadata>,
+    headers: &mut HashMap<String, String>,
     line: String,
     head: Head,
   ) -> Result<Head> {
     let line = line.trim();
     match head {
       Head::FirstLine => {
-        self.metadata = Some(parse_metadata(&line)?);
+        *metadata = Some(parse_metadata(&line)?);
         Ok(Head::Header)
       },
       Head::Header => {
         Ok(if !line.is_empty() {
           let (var, val) = parse_header(&line)?;
-          self.headers.insert(var, val);
+          headers.insert(var, val);
           Head::Header
         } else {
           // The line is empty, so we got CRLF, which signals end of
@@ -277,7 +267,7 @@ impl Parser {
 }
 
 fn parse_metadata(line: &str) -> Result<Metadata> {
-  let parts = line.split_whitespace();
+  let mut parts = line.split_whitespace();
 
   let method = parts
     .next()
@@ -335,7 +325,7 @@ fn parse_metadata(line: &str) -> Result<Metadata> {
 }
 
 fn parse_header(line: &str) -> Result<(String, String)> {
-  let parts = line
+  let mut parts = line
     .split(":")
     .map(|part| part.trim());
     
@@ -350,13 +340,14 @@ fn parse_header(line: &str) -> Result<(String, String)> {
     .next()
     .ok_or_else(|| Error::HeaderValueMissing {
       line: line.to_string(),
-      var,
+      var: var.clone(),
     })?
     .to_string();
 
   Ok((var, val))
 }
 
+#[derive(Clone, Debug)]
 pub enum Error {
   /// An error occurred decoding the header due to incorrect usage
   /// of text encoding by the sender.
