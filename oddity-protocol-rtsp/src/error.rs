@@ -8,8 +8,23 @@ pub enum Error {
   /// An error occurred decoding the header due to incorrect usage
   /// of text encoding by the sender.
   Encoding,
-  /// The first line of the head part is malformed.
-  FirstLineMalformed {
+  /// The request line of the head part is malformed.
+  RequestLineMalformed {
+    line: String
+  },
+  /// The status line of the head part is malformed.
+  StatusLineMalformed {
+    line: String
+  },
+  /// The header first line does have a method and target URI, but
+  /// it does not have a version, which is the required third part
+  /// of the first line of the head.
+  VersionMissing {
+    line: String
+  },
+  /// The response status line does have a version, but does not have
+  /// a status code which is required.
+  StatusCodeMissing {
     line: String
   },
   /// The specified method is not a valid method.
@@ -23,17 +38,22 @@ pub enum Error {
   UriMissing {
     line: String
   },
-  /// The header first line does have a method and target URI, but
-  /// it does not have a version, which is the required third part
-  /// of the first line of the head.
-  VersionMissing {
-    line: String
+  /// The response status line has a version and status code, but is
+  /// missing a reason phrase which is required.
+  ReasonPhraseMissing {
+    line: String,
   },
   /// The version specifier is incorrect. It should start with "RTSP/"
   /// followed by a digit, "." and another digit.
   VersionMalformed {
     line: String,
     version: String
+  },
+  /// The provided status code is not an unsigned integer or cannot be
+  /// converted to one. It must be a 3-digit non-negative number.
+  StatusCodeNotInteger {
+    line: String,
+    status_code: String
   },
   /// Header line is missing the header variable.
   HeaderVariableMissing {
@@ -79,16 +99,24 @@ impl fmt::Display for Error {
     match self {
       Error::Encoding =>
         write!(f, "encoding incorrect"),
-      Error::FirstLineMalformed { line, } =>
+      Error::RequestLineMalformed { line, } =>
         write!(f, "request line malformed: {}", &line),
+      Error::StatusLineMalformed { line, } =>
+        write!(f, "status line malformed: {}", &line),
+      Error::VersionMissing { line, } =>
+        write!(f, "version missing in request line: {}", &line),
+      Error::StatusCodeMissing { line, } =>
+        write!(f, "status code missing in response line: {}", &line),
       Error::MethodUnknown { line, method, } =>
         write!(f, "method unknown: {} (in request line: {})", &method, &line),
       Error::UriMissing { line, } =>
         write!(f, "uri missing in request line: {}", &line),
-      Error::VersionMissing { line, } =>
-        write!(f, "version missing in request line: {}", &line),
+      Error::ReasonPhraseMissing { line, } =>
+        write!(f, "reason phrase missing in response line: {}", &line),
       Error::VersionMalformed { line, version, } =>
-        write!(f, "version malformed: {} (in request line: {})", &version, &line),
+        write!(f, "version malformed: {} (in line: {})", &version, &line),
+      Error::StatusCodeNotInteger { line, status_code } =>
+        write!(f, "response has invalid status code: {} (in response line: {})", &status_code, &line),
       Error::HeaderVariableMissing { line, } =>
         write!(f, "header does not have variable: {}", &line),
       Error::HeaderValueMissing { line, var, } =>
