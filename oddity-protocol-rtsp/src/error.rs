@@ -12,10 +12,6 @@ pub enum Error {
   RequestLineMalformed {
     line: String
   },
-  /// The status line of the head part is malformed.
-  StatusLineMalformed {
-    line: String
-  },
   /// The header first line does have a method and target URI, but
   /// it does not have a version, which is the required third part
   /// of the first line of the head.
@@ -55,14 +51,9 @@ pub enum Error {
     line: String,
     status_code: String
   },
-  /// Header line is missing the header variable.
-  HeaderVariableMissing {
+  /// Header line is malformed.
+  HeaderMalformed {
     line: String,
-  },
-  /// Header does not have value.
-  HeaderValueMissing {
-    line: String,
-    var: String,
   },
   /// The Content-Length header is missing, but it is required.
   ContentLengthMissing,
@@ -101,8 +92,6 @@ impl fmt::Display for Error {
         write!(f, "encoding incorrect"),
       Error::RequestLineMalformed { line, } =>
         write!(f, "request line malformed: {}", &line),
-      Error::StatusLineMalformed { line, } =>
-        write!(f, "status line malformed: {}", &line),
       Error::VersionMissing { line, } =>
         write!(f, "version missing in request line: {}", &line),
       Error::StatusCodeMissing { line, } =>
@@ -117,10 +106,8 @@ impl fmt::Display for Error {
         write!(f, "version malformed: {} (in line: {})", &version, &line),
       Error::StatusCodeNotInteger { line, status_code } =>
         write!(f, "response has invalid status code: {} (in response line: {})", &status_code, &line),
-      Error::HeaderVariableMissing { line, } =>
-        write!(f, "header does not have variable: {}", &line),
-      Error::HeaderValueMissing { line, var, } =>
-        write!(f, "header does not have value: {} (full line: {})", &var, &line),
+      Error::HeaderMalformed { line, } =>
+        write!(f, "header line malformed: {}", &line),
       Error::ContentLengthMissing =>
         write!(f, "request does not have Content-Length header"),
       Error::ContentLengthNotInteger { value, } =>

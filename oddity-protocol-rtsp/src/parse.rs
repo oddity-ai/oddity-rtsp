@@ -26,7 +26,6 @@ pub type ResponseParser = Parser<Response>;
 #[derive(Clone, PartialEq, Debug)]
 pub enum Status {
   Hungry,
-  HungryFor(usize),
   Done,
 }
 
@@ -55,60 +54,60 @@ impl<M: Message> Parser<M>
     }
   }
 
-  pub fn parse(&mut self, buffer: &[u8]) -> Result<Status> {
-    self.state = self.parse_inner(buffer)?;
+  pub fn parse(&mut self, buf: &[u8]) -> Result<Status> {
+    self.buf.extend_from_slice(buf);
+    self.parse_loop()?;
 
     match &self.state {
       State::Body(Body::Complete) =>
         Ok(Status::Done),
-      State::Body(Body::Incomplete(need)) =>
-        Ok(Status::HungryFor(*need)),
+      State::Body(Body::Incomplete) =>
+        Ok(Status::Hungry),
       State::Head(_) =>
         Ok(Status::Hungry),
     }
   }
 
-  fn parse_inner(&mut self, buffer: &[u8]) -> Result<State> {
+  fn parse_loop(&mut self) -> Result<()> {
+    let mut again = true;
+    while again {
+      (self.state, again) = self.parse_inner()?;
+    }
+
+    Ok(())
+  }
+
+  fn parse_inner(&mut self) -> Result<(State, Again)> {
     match self.state {
       State::Head(head) => {
         let (read_bytes, next_head) =
-          self.parse_inner_head(buffer, head)?;
+          self.parse_inner_head(head)?;
 
-        // TODO(gerwin) Is this correct?
-        if read_bytes != 0 {
-          self.buf.clear();
-        }
-
-        if read_bytes < buffer.len() {
-          self.buf.extend_from_slice(&buffer[read_bytes..]);
-        }
+        self.buf = self.buf[read_bytes..].to_vec(); // TODO(gerwin) Good style?
 
         match next_head {
           Head::Done => {
-            self
-              .find_content_length()
-              .map(|content_length| {
-                if let Some(content_length) = content_length {
-                  let content_length_remaining = content_length - self.buf.len();
-                  State::Body(Body::Incomplete(content_length_remaining))
-                } else {
-                  State::Body(Body::Complete)
-                }
-              })
+            if self.have_content_length() {
+              Ok((State::Body(Body::Incomplete), true))
+            } else {
+              Ok((State::Body(Body::Complete), false))
+            }
           },
-          _ =>
-            Ok(State::Head(next_head)),
+          _ => {
+            Ok((State::Head(next_head), false))
+          }
         }
       },
-      State::Body(Body::Incomplete(need)) => {
-        let got = buffer.len();
-        let body_bytes = &buffer[..need.min(got)];
-        self.buf.extend_from_slice(body_bytes);
+      State::Body(Body::Incomplete) => {
+        let need = self.find_content_length()?
+          .ok_or_else(|| Error::ContentLengthMissing)?;
+        let got = self.buf.len();
         if got == need {
-          Ok(State::Body(Body::Complete))
+          Ok((State::Body(Body::Complete), false))
         } else if got < need {
-          Ok(State::Body(Body::Incomplete(need - got)))
+          Ok((State::Body(Body::Incomplete), false))
         } else {
+          self.buf = self.buf[..need].to_vec(); // TODO
           Err(Error::BodyOverflow {
             need: need,
             got
@@ -123,25 +122,23 @@ impl<M: Message> Parser<M>
 
   fn parse_inner_head(
     &mut self,
-    buffer: &[u8],
     mut head: Head,
   ) -> Result<(usize, Head)> {
-    let buffer = if self.buf.len() > 0 {
-      self.buf.extend_from_slice(buffer);
-      &self.buf
-    } else {
-      buffer
-    };
-
-    let mut cursor = Cursor::new(buffer);
+    let mut cursor = Cursor::new(&self.buf); // TODO this might be a bit innefficient doing it every time
     let mut total_read_bytes = 0;
-    loop {
+    while head != Head::Done {
       let mut line = String::new();
+
       let read_bytes = cursor.read_line(&mut line)
         .map_err(|_| Error::Encoding)?;
+
       if read_bytes == 0 {
-        // If `read_line` returns `0`, then it means that it could
-        // not read a full line. We break out of this loop, signal
+        // Reached EOF.
+        break;
+      }
+
+      if !line.ends_with('\n') {
+        // No full line available: Break out of this loop, signal
         // to the caller that we have only read part of the buffer
         // by returning `total_read_bytes`.
         break;
@@ -188,6 +185,12 @@ impl<M: Message> Parser<M>
 
   fn parse_metadata(line: &str) -> Result<M::Metadata> {
     M::Metadata::parse(line)
+  }
+
+  fn have_content_length(&self) -> bool {
+    self
+      .headers
+      .contains_key("Content-Length")
   }
 
   fn find_content_length(&self) -> Result<Option<usize>> {
@@ -237,22 +240,24 @@ impl Parser<Response> {
 
 }
 
-#[derive(Clone, Copy)]
+type Again = bool;
+
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum State {
   Head(Head),
   Body(Body),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Head {
   FirstLine,
   Header,
   Done,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 enum Body {
-  Incomplete(usize),
+  Incomplete,
   Complete,
 }
 
@@ -266,7 +271,7 @@ pub trait Parse {
 impl Parse for RequestMetadata {
 
   fn parse(line: &str) -> Result<RequestMetadata> {
-    let mut parts = line.split_whitespace();
+    let mut parts = line.split(' ');
 
     let method = parts
       .next()
@@ -317,33 +322,30 @@ impl Parse for RequestMetadata {
 impl Parse for ResponseMetadata {
 
   fn parse(line: &str) -> Result<ResponseMetadata> {
-    let mut parts = line.split_whitespace();
-
-    let version = parts
-      .next()
-      .ok_or_else(|| Error::StatusLineMalformed {
-        line: line.to_string(),
-      })?;
-
-    let version = parse_version(version, line)?;
-
-    let status_code = parts
-      .next()
+    let (version, rest) = line
+      .split_once(' ')
       .ok_or_else(|| Error::StatusCodeMissing {
-        line: line.to_string(),
+        line: line.to_string()
       })?;
-      
-    let status_code = status_code.parse::<StatusCode>()
+
+    let version = parse_version(version.trim(), line)?;
+
+    let (status_code, rest) = rest
+      .split_once(' ')
+      .ok_or_else(|| Error::ReasonPhraseMissing {
+        line: line.to_string()
+      })?;
+
+    let status_code = status_code
+      .trim()
+      .parse::<StatusCode>()
       .map_err(|_| Error::StatusCodeNotInteger {
         line: line.to_string(),
         status_code: status_code.to_string(),
       })?;
 
-    let reason = parts
-      .next()
-      .ok_or_else(|| Error::ReasonPhraseMissing {
-        line: line.to_string(),
-      })?
+    let reason = rest
+      .trim()
       .to_string();
 
     Ok(ResponseMetadata::new(version, status_code, reason))
@@ -367,30 +369,18 @@ fn parse_version(part: &str, line: &str) -> Result<Version> {
 }
 
 fn parse_header(line: &str) -> Result<(String, String)> {
-  let mut parts = line
-    .split(":")
-    .map(|part| part.trim());
+  let (var, val) = line
+    .split_once(":")
+    .ok_or_else(|| Error::HeaderMalformed {
+      line: line.to_string()
+    })?;
     
-  let var = parts
-    .next()
-    .ok_or_else(|| Error::HeaderVariableMissing {
-      line: line.to_string(),
-    })?
-    .to_string();
-
-  let val = parts
-    .next()
-    .ok_or_else(|| Error::HeaderValueMissing {
-      line: line.to_string(),
-      var: var.clone(),
-    })?
-    .to_string();
-
-  Ok((var, val))
+  Ok((var.trim().to_string(), val.trim().to_string()))
 }
 
 #[cfg(test)]
 mod tests {
+
   use super::{
     RequestParser,
     ResponseParser,
@@ -400,7 +390,7 @@ mod tests {
   };
 
   #[test]
-  fn parse_request_options() {
+  fn parse_options_request() {
     let request = br###"OPTIONS rtsp://example.com/media.mp4 RTSP/1.0
 CSeq: 1
 Require: implicit-play
@@ -421,12 +411,116 @@ Proxy-Require: gzipped-messages
   }
 
   #[test]
-  fn parse_response_describe() {
+  fn parse_options_request_any() {
+    let request = br###"OPTIONS * RTSP/1.0
+CSeq: 1
+
+"###;
+
+    let mut parser = RequestParser::new();
+    assert_eq!(parser.parse(request).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    assert_eq!(request.metadata.method, Method::Options);
+    assert_eq!(request.metadata.uri, "*");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
+  }
+
+  #[test]
+  fn parse_options_response() {
+    let response = br###"RTSP/1.0 200 OK
+CSeq: 1
+Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
+
+"###;
+
+    let mut parser = ResponseParser::new();
+    assert_eq!(parser.parse(response).unwrap(), Status::Done);
+
+    let response = parser.into_response().unwrap();
+    assert_eq!(response.metadata.version, Version::V1);
+    assert_eq!(response.metadata.status, 200);
+    assert_eq!(response.metadata.reason, "OK");
+    assert_eq!(response.headers.get("CSeq"), Some(&"1".to_string()));
+    assert_eq!(response.headers.get("Public"), Some(&"DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE".to_string()));
+  }
+
+  #[test]
+  fn parse_options_response_error() {
+    let response = br###"RTSP/1.0 404 Stream Not Found
+CSeq: 1
+
+"###;
+
+    let mut parser = ResponseParser::new();
+    assert_eq!(parser.parse(response).unwrap(), Status::Done);
+
+    let response = parser.into_response().unwrap();
+    assert_eq!(response.metadata.version, Version::V1);
+    assert_eq!(response.metadata.status, 404);
+    assert_eq!(response.metadata.reason, "Stream Not Found");
+    assert_eq!(response.headers.get("CSeq"), Some(&"1".to_string()));
+  }
+
+  #[test]
+  fn parse_describe_request() {
+    let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/1.0
+CSeq: 2
+
+"###;
+
+    let mut parser = RequestParser::new();
+    assert_eq!(parser.parse(request).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    assert_eq!(request.metadata.method, Method::Describe);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"2".to_string()));
+  }
+
+  #[test]
+  fn parse_describe_request_v2() {
+    let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/2.0
+CSeq: 2
+
+"###;
+
+    let mut parser = RequestParser::new();
+    assert_eq!(parser.parse(request).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    assert_eq!(request.metadata.method, Method::Describe);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.metadata.version, Version::V2);
+    assert_eq!(request.headers.get("CSeq"), Some(&"2".to_string()));
+  }
+
+  #[test]
+  fn parse_describe_request_v3() {
+    let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/3.0
+CSeq: 2
+
+"###;
+
+    let mut parser = RequestParser::new();
+    assert_eq!(parser.parse(request).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    assert_eq!(request.metadata.method, Method::Describe);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.metadata.version, Version::Unknown);
+    assert_eq!(request.headers.get("CSeq"), Some(&"2".to_string()));
+  }
+
+  #[test]
+  fn parse_describe_response() {
     let response = br###"RTSP/1.0 200 OK
 CSeq: 2
 Content-Base: rtsp://example.com/media.mp4
 Content-Type: application/sdp
-Content-Length: 460
+Content-Length: 443
 
 m=video 0 RTP/AVP 96
 a=control:streamid=0
@@ -443,13 +537,72 @@ a=length:npt=7.712000
 a=rtpmap:97 mpeg4-generic/32000/2
 a=mimetype:string;"audio/mpeg4-generic"
 a=AvgBitRate:integer;65790
-a=StreamName:string;"hinted audio track"###;
+a=StreamName:string;"hinted audio track""###;
 
     let mut parser = ResponseParser::new();
     assert_eq!(parser.parse(response).unwrap(), Status::Done);
 
     let response = parser.into_response().unwrap();
-    println!("{:?}", response);
+    assert_eq!(response.metadata.version, Version::V1);
+    assert_eq!(response.metadata.status, 200);
+    assert_eq!(response.metadata.reason, "OK");
+    assert_eq!(response.headers.get("CSeq"), Some(&"2".to_string()));
+    assert_eq!(response.headers.get("Content-Base"), Some(&"rtsp://example.com/media.mp4".to_string()));
+    assert_eq!(response.headers.get("Content-Type"), Some(&"application/sdp".to_string()));
+    assert_eq!(response.headers.get("Content-Length"), Some(&"443".to_string()));
+  }
+
+  const EXAMPLE_REQUEST_PLAY: &[u8] = br###"PLAY rtsp://example.com/stream/0 RTSP/1.0
+CSeq: 1
+Session: 1234abcd
+Content-Length: 16
+
+0123456789abcdef"###;
+
+  #[test]
+  fn parse_play_request() {
+    let mut parser = RequestParser::new();
+    assert_eq!(parser.parse(EXAMPLE_REQUEST_PLAY).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    println!("{:?}", request);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece1() {
+    let mut parser = RequestParser::new();
+
+    let upto_last = EXAMPLE_REQUEST_PLAY.len() - 1;
+    for i in 0..upto_last {
+      let i_range = i..i + 1;
+      assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[i_range]).unwrap(), Status::Hungry);
+    }
+
+    let last_range = EXAMPLE_REQUEST_PLAY.len() - 1..;
+    assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[last_range]).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    println!("{:?}", request);
+  }
+  
+  #[test]
+  fn parse_play_request_partial_piece3() {
+    const PIECE_SIZE: usize = 3;
+
+    let mut parser = RequestParser::new();
+
+    let pieces_upto_last = (EXAMPLE_REQUEST_PLAY.len() / PIECE_SIZE) - 1;
+    for i in 0..pieces_upto_last {
+      let piece_range = (i * PIECE_SIZE)..(i * PIECE_SIZE) + PIECE_SIZE;
+      assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[piece_range]).unwrap(), Status::Hungry);
+    }
+
+    let last_piece = pieces_upto_last;
+    let leftover_piece_range = last_piece * 3..;
+    assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[leftover_piece_range]).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    println!("{:?}", request);
   }
 
 }
