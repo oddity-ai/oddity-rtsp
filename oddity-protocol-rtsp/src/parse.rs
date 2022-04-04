@@ -23,7 +23,7 @@ use super::{
 pub type RequestParser = Parser<Request>;
 pub type ResponseParser = Parser<Response>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Status {
   Hungry,
   HungryFor(usize),
@@ -88,8 +88,12 @@ impl<M: Message> Parser<M>
             self
               .find_content_length()
               .map(|content_length| {
-                let content_length_remaining = content_length - self.buf.len();
-                State::Body(Body::Incomplete(content_length_remaining))
+                if let Some(content_length) = content_length {
+                  let content_length_remaining = content_length - self.buf.len();
+                  State::Body(Body::Incomplete(content_length_remaining))
+                } else {
+                  State::Body(Body::Complete)
+                }
               })
           },
           _ =>
@@ -186,17 +190,19 @@ impl<M: Message> Parser<M>
     M::Metadata::parse(line)
   }
 
-  fn find_content_length(&self) -> Result<usize> {
-    let content_length = self
-      .headers
-      .get("Content-Length")
-      .ok_or_else(|| Error::ContentLengthMissing)?;
+  fn find_content_length(&self) -> Result<Option<usize>> {
+    if let Some(content_length) = self
+        .headers
+        .get("Content-Length") {
 
-    content_length
-      .parse::<usize>()
-      .map_err(|_| Error::ContentLengthNotInteger {
-        value: content_length.clone(),
-      })
+      Ok(Some(content_length
+        .parse::<usize>()
+        .map_err(|_| Error::ContentLengthNotInteger {
+          value: content_length.clone(),
+        })?))
+    } else {
+      Ok(None)
+    }
   }
 
   fn into(self) -> Result<M> {
@@ -381,4 +387,69 @@ fn parse_header(line: &str) -> Result<(String, String)> {
     .to_string();
 
   Ok((var, val))
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{
+    RequestParser,
+    ResponseParser,
+    Status,
+    Version,
+    Method,
+  };
+
+  #[test]
+  fn parse_request_options() {
+    let request = br###"OPTIONS rtsp://example.com/media.mp4 RTSP/1.0
+CSeq: 1
+Require: implicit-play
+Proxy-Require: gzipped-messages
+
+"###;
+
+    let mut parser = RequestParser::new();
+    assert_eq!(parser.parse(request).unwrap(), Status::Done);
+
+    let request = parser.into_request().unwrap();
+    assert_eq!(request.metadata.method, Method::Options);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
+    assert_eq!(request.headers.get("Require"), Some(&"implicit-play".to_string()));
+    assert_eq!(request.headers.get("Proxy-Require"), Some(&"gzipped-messages".to_string()));
+  }
+
+  #[test]
+  fn parse_response_describe() {
+    let response = br###"RTSP/1.0 200 OK
+CSeq: 2
+Content-Base: rtsp://example.com/media.mp4
+Content-Type: application/sdp
+Content-Length: 460
+
+m=video 0 RTP/AVP 96
+a=control:streamid=0
+a=range:npt=0-7.741000
+a=length:npt=7.741000
+a=rtpmap:96 MP4V-ES/5544
+a=mimetype:string;"video/MP4V-ES"
+a=AvgBitRate:integer;304018
+a=StreamName:string;"hinted video track"
+m=audio 0 RTP/AVP 97
+a=control:streamid=1
+a=range:npt=0-7.712000
+a=length:npt=7.712000
+a=rtpmap:97 mpeg4-generic/32000/2
+a=mimetype:string;"audio/mpeg4-generic"
+a=AvgBitRate:integer;65790
+a=StreamName:string;"hinted audio track"###;
+
+    let mut parser = ResponseParser::new();
+    assert_eq!(parser.parse(response).unwrap(), Status::Done);
+
+    let response = parser.into_response().unwrap();
+    println!("{:?}", response);
+  }
+
 }

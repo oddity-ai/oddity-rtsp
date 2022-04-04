@@ -6,10 +6,11 @@ pub trait Message {
   fn new(metadata: Self::Metadata, headers: Headers, body: Bytes) -> Self;
 }
 
+#[derive(Clone, Debug)]
 pub struct Request {
-  metadata: RequestMetadata,
-  headers: Headers,
-  body: Bytes,
+  pub metadata: RequestMetadata,
+  pub headers: Headers,
+  pub body: Bytes,
 }
 
 impl Message for Request {
@@ -29,10 +30,11 @@ impl Message for Request {
 
 }
 
+#[derive(Clone, Debug)]
 pub struct Response {
-  metadata: ResponseMetadata,
-  headers: Headers,
-  body: Bytes,
+  pub metadata: ResponseMetadata,
+  pub headers: Headers,
+  pub body: Bytes,
 }
 
 impl Message for Response {
@@ -52,7 +54,7 @@ impl Message for Response {
 
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Method {
   Describe,
   Announce,
@@ -67,17 +69,18 @@ pub enum Method {
   SetParameter,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Version {
   V1,
   V2,
   Unknown,
 }
 
+#[derive(Clone, Debug)]
 pub struct RequestMetadata {
-  method: Method,
-  uri: String, // TODO Uri type?
-  version: Version,
+  pub method: Method,
+  pub uri: String, // TODO Uri type?
+  pub version: Version,
 }
 
 impl RequestMetadata {
@@ -98,10 +101,11 @@ impl RequestMetadata {
 
 pub type StatusCode = usize;
 
+#[derive(Clone, Debug)]
 pub struct ResponseMetadata {
-  version: Version,
-  status: StatusCode,
-  reason: String,
+  pub version: Version,
+  pub status: StatusCode,
+  pub reason: String,
 }
 
 impl ResponseMetadata {
@@ -119,6 +123,7 @@ impl ResponseMetadata {
   }
 
 }
+
 pub type Headers = HashMap<String, String>;
 
 pub type Bytes = Vec<u8>;
