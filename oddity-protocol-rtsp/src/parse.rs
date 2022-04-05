@@ -14,6 +14,7 @@ use super::{
     Headers,
     Bytes,
   },
+  buffer::Buffer,
   error::{
     Result,
     Error,
@@ -54,7 +55,11 @@ impl<M: Message> Parser<M>
     }
   }
 
-  pub fn parse(&mut self, buf: &[u8]) -> Result<Status> {
+  pub fn parse(&mut self, buffer: &mut Buffer) -> Result<Status> {
+
+  }
+
+  pub fn parse_from_bytes(&mut self, buf: &[u8]) -> Result<Status> {
     self.buf.extend_from_slice(buf);
     self.parse_loop()?;
 
@@ -384,6 +389,7 @@ mod tests {
     Status,
     Version,
     Method,
+    Bytes,
   };
 
   #[test]
@@ -549,17 +555,17 @@ a=StreamName:string;"hinted audio track""###;
     assert_eq!(response.headers.get("Content-Length"), Some(&"443".to_string()));
   }
 
-  const EXAMPLE_REQUEST_PLAY: &[u8] = br###"PLAY rtsp://example.com/stream/0 RTSP/1.0
-CSeq: 1
-Session: 1234abcd
-Content-Length: 16
-
-0123456789abcdef"###;
+  const EXAMPLE_REQUEST_PLAY_CRLN: &[u8] = b"PLAY rtsp://example.com/stream/0 RTSP/1.0\x0d\x0a\
+CSeq: 1\x0d\x0a\
+Session: 1234abcd\x0d\x0a\
+Content-Length: 16\x0d\x0a\
+\x0d\x0a\
+0123456789abcdef";
 
   #[test]
   fn parse_play_request() {
     let mut parser = RequestParser::new();
-    assert_eq!(parser.parse(EXAMPLE_REQUEST_PLAY).unwrap(), Status::Done);
+    assert_eq!(parser.parse(EXAMPLE_REQUEST_PLAY_CRLN).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
     assert_eq!(request.metadata.method, Method::Play);
@@ -572,17 +578,96 @@ Content-Length: 16
   }
 
   #[test]
-  fn parse_play_request_partial_piece1() {
+  fn parse_play_request_partial_piece1_ln() {
+    parse_play_request_partial_piece1(&request_play_ln());
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece2_ln() {
+    parse_play_request_partial_piece(&request_play_ln(), 2);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece3_ln() {
+    parse_play_request_partial_piece(&request_play_ln(), 3);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece_varying_ln() {
+    parse_play_request_partial_piece_varying(&request_play_ln());
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece1_cr() {
+    parse_play_request_partial_piece1(&request_play_cr());
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece2_cr() {
+    parse_play_request_partial_piece(&request_play_cr(), 2);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece3_cr() {
+    parse_play_request_partial_piece(&request_play_cr(), 3);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece_varying_cr() {
+    parse_play_request_partial_piece_varying(&request_play_cr());
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece1_crln() {
+    parse_play_request_partial_piece1(&request_play_crln());
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece2_crln() {
+    parse_play_request_partial_piece(&request_play_crln(), 2);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece3_crln() {
+    parse_play_request_partial_piece(&request_play_crln(), 3);
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece_varying_crln() {
+    parse_play_request_partial_piece_varying(&request_play_crln());
+  }
+
+  fn request_play_ln() -> Bytes {
+    EXAMPLE_REQUEST_PLAY_CRLN
+      .to_vec()
+      .into_iter()
+      .filter(|b| *b != b'\x0d')
+      .collect::<Bytes>()
+  }
+
+  fn request_play_cr() -> Bytes {
+    EXAMPLE_REQUEST_PLAY_CRLN
+      .to_vec()
+      .into_iter()
+      .filter(|b| *b != b'\x0a')
+      .collect::<Bytes>()
+  }
+
+  fn request_play_crln() -> Bytes {
+    EXAMPLE_REQUEST_PLAY_CRLN.to_vec()
+  }
+
+  fn parse_play_request_partial_piece1(request_bytes: &[u8]) {
     let mut parser = RequestParser::new();
 
-    let upto_last = EXAMPLE_REQUEST_PLAY.len() - 1;
+    let upto_last = request_bytes.len() - 1;
     for i in 0..upto_last {
       let i_range = i..i + 1;
-      assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[i_range]).unwrap(), Status::Hungry);
+      assert_eq!(parser.parse(&request_bytes[i_range]).unwrap(), Status::Hungry);
     }
 
-    let last_range = EXAMPLE_REQUEST_PLAY.len() - 1..;
-    assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[last_range]).unwrap(), Status::Done);
+    let last_range = request_bytes.len() - 1..;
+    assert_eq!(parser.parse(&request_bytes[last_range]).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
     assert_eq!(request.metadata.method, Method::Play);
@@ -594,28 +679,18 @@ Content-Length: 16
     assert_eq!(request.body, b"0123456789abcdef");
   }
   
-  #[test]
-  fn parse_play_request_partial_piece2() {
-    parse_play_request_partial_piece(2);
-  }
-
-  #[test]
-  fn parse_play_request_partial_piece3() {
-    parse_play_request_partial_piece(3);
-  }
-
-  fn parse_play_request_partial_piece(piece_size: usize) {
+  fn parse_play_request_partial_piece(request_bytes: &[u8], piece_size: usize) {
     let mut parser = RequestParser::new();
 
-    let pieces_upto_last = (EXAMPLE_REQUEST_PLAY.len() / piece_size) - 1;
+    let pieces_upto_last = (request_bytes.len() / piece_size) - 1;
     for i in 0..pieces_upto_last {
       let piece_range = (i * piece_size)..(i * piece_size) + piece_size;
-      assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[piece_range]).unwrap(), Status::Hungry);
+      assert_eq!(parser.parse(&request_bytes[piece_range]).unwrap(), Status::Hungry);
     }
 
     let last_piece = pieces_upto_last;
     let leftover_piece_range = last_piece * piece_size..;
-    assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[leftover_piece_range]).unwrap(), Status::Done);
+    assert_eq!(parser.parse(&request_bytes[leftover_piece_range]).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
     assert_eq!(request.metadata.method, Method::Play);
@@ -627,15 +702,14 @@ Content-Length: 16
     assert_eq!(request.body, b"0123456789abcdef");
   }
 
-  #[test]
-  fn parse_play_request_partial_piece_varying() {
+  fn parse_play_request_partial_piece_varying(request_bytes: &[u8]) {
     let mut parser = RequestParser::new();
 
     let mut start = 0;
     let mut size = 1;
     loop {
-      let piece_range = start..(start + size).min(EXAMPLE_REQUEST_PLAY.len());
-      if let Status::Done = parser.parse(&EXAMPLE_REQUEST_PLAY[piece_range]).unwrap() {
+      let piece_range = start..(start + size).min(request_bytes.len());
+      if let Status::Done = parser.parse(&request_bytes[piece_range]).unwrap() {
         break;
       }
       start += size;
