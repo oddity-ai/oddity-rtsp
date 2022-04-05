@@ -145,7 +145,7 @@ impl<M: Message> Parser<M>
       }
 
       total_read_bytes += read_bytes;
-      head = Self::parse_inner_head_item(
+      head = Self::parse_inner_head_line(
         &mut self.metadata,
         &mut self.headers,
         line,
@@ -155,7 +155,7 @@ impl<M: Message> Parser<M>
     Ok((total_read_bytes, head))
   }
 
-  fn parse_inner_head_item(
+  fn parse_inner_head_line(
     metadata: &mut Option<M::Metadata>,
     headers: &mut HashMap<String, String>,
     line: String,
@@ -261,11 +261,8 @@ enum Body {
   Complete,
 }
 
-pub trait Parse {
-
-  fn parse(line: &str) -> Result<Self>
-    where Self: Sized;
-
+pub trait Parse: Sized {
+  fn parse(line: &str) -> Result<Self>;
 }
 
 impl Parse for RequestMetadata {
@@ -565,7 +562,13 @@ Content-Length: 16
     assert_eq!(parser.parse(EXAMPLE_REQUEST_PLAY).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
-    println!("{:?}", request);
+    assert_eq!(request.metadata.method, Method::Play);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
+    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
+    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
+    assert_eq!(request.body, b"0123456789abcdef");
   }
 
   #[test]
@@ -582,27 +585,71 @@ Content-Length: 16
     assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[last_range]).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
-    println!("{:?}", request);
+    assert_eq!(request.metadata.method, Method::Play);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
+    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
+    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
+    assert_eq!(request.body, b"0123456789abcdef");
   }
   
   #[test]
-  fn parse_play_request_partial_piece3() {
-    const PIECE_SIZE: usize = 3;
+  fn parse_play_request_partial_piece2() {
+    parse_play_request_partial_piece(2);
+  }
 
+  #[test]
+  fn parse_play_request_partial_piece3() {
+    parse_play_request_partial_piece(3);
+  }
+
+  fn parse_play_request_partial_piece(piece_size: usize) {
     let mut parser = RequestParser::new();
 
-    let pieces_upto_last = (EXAMPLE_REQUEST_PLAY.len() / PIECE_SIZE) - 1;
+    let pieces_upto_last = (EXAMPLE_REQUEST_PLAY.len() / piece_size) - 1;
     for i in 0..pieces_upto_last {
-      let piece_range = (i * PIECE_SIZE)..(i * PIECE_SIZE) + PIECE_SIZE;
+      let piece_range = (i * piece_size)..(i * piece_size) + piece_size;
       assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[piece_range]).unwrap(), Status::Hungry);
     }
 
     let last_piece = pieces_upto_last;
-    let leftover_piece_range = last_piece * 3..;
+    let leftover_piece_range = last_piece * piece_size..;
     assert_eq!(parser.parse(&EXAMPLE_REQUEST_PLAY[leftover_piece_range]).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
-    println!("{:?}", request);
+    assert_eq!(request.metadata.method, Method::Play);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
+    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
+    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
+    assert_eq!(request.body, b"0123456789abcdef");
+  }
+
+  #[test]
+  fn parse_play_request_partial_piece_varying() {
+    let mut parser = RequestParser::new();
+
+    let mut start = 0;
+    let mut size = 1;
+    loop {
+      let piece_range = start..(start + size).min(EXAMPLE_REQUEST_PLAY.len());
+      if let Status::Done = parser.parse(&EXAMPLE_REQUEST_PLAY[piece_range]).unwrap() {
+        break;
+      }
+      start += size;
+      size = (size * 2) % 9;
+    }
+
+    let request = parser.into_request().unwrap();
+    assert_eq!(request.metadata.method, Method::Play);
+    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
+    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
+    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
+    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
+    assert_eq!(request.body, b"0123456789abcdef");
   }
 
 }
