@@ -3,14 +3,19 @@ use std::collections::HashMap;
 pub trait Message {
   type Metadata;
 
-  fn new(metadata: Self::Metadata, headers: Headers, body: Bytes) -> Self;
+  fn new(
+    metadata: Self::Metadata,
+    headers: Headers,
+    body: Option<Bytes>
+  ) -> Self;
+
 }
 
 #[derive(Clone, Debug)]
 pub struct Request {
   pub metadata: RequestMetadata,
   pub headers: Headers,
-  pub body: Bytes,
+  pub body: Option<Bytes>,
 }
 
 impl Message for Request {
@@ -19,7 +24,7 @@ impl Message for Request {
   fn new(
     metadata: RequestMetadata,
     headers: Headers,
-    body: Bytes,
+    body: Option<Bytes>,
   ) -> Self {
     Self {
       metadata,
@@ -34,7 +39,7 @@ impl Message for Request {
 pub struct Response {
   pub metadata: ResponseMetadata,
   pub headers: Headers,
-  pub body: Bytes,
+  pub body: Option<Bytes>,
 }
 
 impl Message for Response {
@@ -43,7 +48,7 @@ impl Message for Response {
   fn new(
     metadata: ResponseMetadata,
     headers: Headers,
-    body: Bytes,
+    body: Option<Bytes>,
   ) -> Self {
     Self {
       metadata,
