@@ -96,15 +96,9 @@ impl<M: Message> Parser<M>
           .ok_or_else(|| Error::ContentLengthMissing)?;
         let got = buffer.remaining();
 
-        if got == need {
+        if got >= need {
           self.body = Some(buffer.read(need));
           Ok((State::Body(Body::Complete), false))
-        } else if got > need {
-          self.body = Some(buffer.read(need));
-          Err(Error::BodyOverflow {
-            need: need,
-            got
-          })
         } else {
           Ok((State::Body(Body::Incomplete), false))
         }
@@ -387,6 +381,7 @@ fn parse_header(line: &str) -> Result<(String, String)> {
 mod tests {
 
   use super::{
+    Request,
     RequestParser,
     ResponseParser,
     Status,
@@ -534,8 +529,116 @@ a=StreamName:string;"hinted audio track""###.to_vec();
     assert_eq!(response.headers.get("Content-Type"), Some(&"application/sdp".to_string()));
     assert_eq!(response.headers.get("Content-Length"), Some(&"443".to_string()));
   }
+
+  const EXAMPLE_PIPELINED_REQUESTS: &[u8] = br###"RECORD rtsp://example.com/media.mp4 RTSP/1.0
+CSeq: 6
+Session: 12345678
+
+ANNOUNCE rtsp://example.com/media.mp4 RTSP/1.0
+CSeq: 7
+Date: 23 Jan 1997 15:35:06 GMT
+Session: 12345678
+Content-Type: application/sdp
+Content-Length: 305
+
+v=0
+o=mhandley 2890844526 2890845468 IN IP4 126.16.64.4
+s=SDP Seminar
+i=A Seminar on the session description protocol
+u=http://www.cs.ucl.ac.uk/staff/M.Handley/sdp.03.ps
+e=mjh@isi.edu (Mark Handley)
+c=IN IP4 224.2.17.12/127
+t=2873397496 2873404696
+a=recvonly
+m=audio 3456 RTP/AVP 0
+m=video 2232 RTP/AVP 31TEARDOWN rtsp://example.com/media.mp4 RTSP/1.0
+CSeq: 8
+Session: 12345678
+
+"###;
+
+  #[test]
+  fn parse_pipelined_requests() {
+    let mut buffer = Buffer::from(EXAMPLE_PIPELINED_REQUESTS.to_vec());
+    let mut parser = RequestParser::new();
+
+    let mut requests = Vec::new();
+    for _ in 0..3 {
+      if parser.parse(&mut buffer).unwrap() == Status::Done {
+        requests.push(parser.into_request().unwrap());
+        parser = RequestParser::new();
+      }
+    }
+
+    test_example_piplined_requests(&requests);
+  }
   
-  // TODO TEST PIPELINING
+  #[test]
+  fn parse_pipelined_requests_pieces1() {
+    let mut buffer = Buffer::new();
+    let mut parser = RequestParser::new();
+
+    let mut requests = Vec::new();
+    for i in 0..EXAMPLE_PIPELINED_REQUESTS.len() {
+      buffer.extend_from_slice(&EXAMPLE_PIPELINED_REQUESTS[i..i + 1]);
+      if parser.parse(&mut buffer).unwrap() == Status::Done  {
+        requests.push(parser.into_request().unwrap());
+        parser = RequestParser::new();
+      }
+    }
+
+    test_example_piplined_requests(&requests);
+  }
+
+  #[test]
+  fn parse_pipelined_requests_pieces_varying() {
+    let mut buffer = Buffer::new();
+    let mut parser = RequestParser::new();
+
+    let mut requests = Vec::new();
+    let mut start = 0;
+    let mut size = 1;
+    loop {
+      let piece_range = start..(start + size).min(EXAMPLE_PIPELINED_REQUESTS.len());
+      buffer.extend_from_slice(&EXAMPLE_PIPELINED_REQUESTS[piece_range]);
+      if let Status::Done = parser.parse(&mut buffer).unwrap() {
+        requests.push(parser.into_request().unwrap());
+        parser = RequestParser::new();
+      }
+      start += size;
+      size = (size * 2) % 9;
+      if start >= EXAMPLE_PIPELINED_REQUESTS.len() {
+        break;
+      }
+    }
+
+    test_example_piplined_requests(&requests);
+  }
+
+  fn test_example_piplined_requests(requests: &[Request]) {
+    assert_eq!(requests.len(), 3);
+    assert_eq!(requests[0].metadata.method, Method::Record);
+    assert_eq!(requests[0].metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(requests[0].metadata.version, Version::V1);
+    assert_eq!(requests[0].headers.get("CSeq"), Some(&"6".to_string()));
+    assert_eq!(requests[0].headers.get("Session"), Some(&"12345678".to_string()));
+    assert_eq!(requests[0].body, None);
+    assert_eq!(requests[1].metadata.method, Method::Announce);
+    assert_eq!(requests[1].metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(requests[1].metadata.version, Version::V1);
+    assert_eq!(requests[1].headers.get("CSeq"), Some(&"7".to_string()));
+    assert_eq!(requests[1].headers.get("Session"), Some(&"12345678".to_string()));
+    assert_eq!(requests[1].headers.get("Date"), Some(&"23 Jan 1997 15:35:06 GMT".to_string()));
+    assert_eq!(requests[1].headers.get("Content-Type"), Some(&"application/sdp".to_string()));
+    assert_eq!(requests[1].headers.get("Content-Length"), Some(&"305".to_string()));
+    assert_eq!(requests[1].body.as_ref().unwrap().len(), 305);
+    assert_eq!(requests[2].metadata.method, Method::Teardown);
+    assert_eq!(requests[2].metadata.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(requests[2].metadata.version, Version::V1);
+    assert_eq!(requests[2].headers.get("CSeq"), Some(&"8".to_string()));
+    assert_eq!(requests[2].headers.get("Session"), Some(&"12345678".to_string()));
+    assert_eq!(requests[2].body, None);
+  }
 
   const EXAMPLE_REQUEST_PLAY_CRLN: &[u8] = b"PLAY rtsp://example.com/stream/0 RTSP/1.0\x0d\x0a\
 CSeq: 1\x0d\x0a\
@@ -549,13 +652,7 @@ Content-Length: 16\x0d\x0a\
     let request = RequestParser::new()
       .parse_bytes_and_into_request(EXAMPLE_REQUEST_PLAY_CRLN.to_vec())
       .unwrap();
-    assert_eq!(request.metadata.method, Method::Play);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
-    assert_eq!(request.metadata.version, Version::V1);
-    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
-    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
-    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
-    assert_eq!(request.body, Some(b"0123456789abcdef".to_vec()));
+    test_example_request_play(&request);
   }
 
   #[test]
@@ -654,13 +751,7 @@ Content-Length: 16\x0d\x0a\
     assert_eq!(parser.parse(&mut buffer).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
-    assert_eq!(request.metadata.method, Method::Play);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
-    assert_eq!(request.metadata.version, Version::V1);
-    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
-    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
-    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
-    assert_eq!(request.body, Some(b"0123456789abcdef".to_vec()));
+    test_example_request_play(&request);
   }
   
   fn parse_play_request_partial_piece(request_bytes: &[u8], piece_size: usize) {
@@ -680,13 +771,7 @@ Content-Length: 16\x0d\x0a\
     assert_eq!(parser.parse(&mut buffer).unwrap(), Status::Done);
 
     let request = parser.into_request().unwrap();
-    assert_eq!(request.metadata.method, Method::Play);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
-    assert_eq!(request.metadata.version, Version::V1);
-    assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
-    assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
-    assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
-    assert_eq!(request.body, Some(b"0123456789abcdef".to_vec()));
+    test_example_request_play(&request);
   }
 
   fn parse_play_request_partial_piece_varying(request_bytes: &[u8]) {
@@ -706,6 +791,10 @@ Content-Length: 16\x0d\x0a\
     }
 
     let request = parser.into_request().unwrap();
+    test_example_request_play(&request);
+  }
+
+  fn test_example_request_play(request: &Request) {
     assert_eq!(request.metadata.method, Method::Play);
     assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
     assert_eq!(request.metadata.version, Version::V1);

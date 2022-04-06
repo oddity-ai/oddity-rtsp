@@ -83,13 +83,6 @@ pub enum Error {
   /// state that signals that parsing the body part of the request
   /// was already done before.
   BodyAlreadyDone,
-  /// This occurs when the client provided more bytes than expected,
-  /// and appending any more bytes to the body would cause it to
-  /// become larger than the provided Content-Length.
-  BodyOverflow {
-    need: usize,
-    got: usize,
-  },
   /// Metadata was not parsed for some reason.
   MetadataNotParsed,
   /// This occurs when the caller tries to turn the parser into an
@@ -133,8 +126,6 @@ impl fmt::Display for Error {
         write!(f, "head already done (cycle in state machine)"),
       Error::BodyAlreadyDone =>
         write!(f, "body already done (cycle in state machine)"),
-      Error::BodyOverflow { need, got, } =>
-        write!(f, "received more data than expected for request body: needed {}, but got {} bytes", need, got),
       Error::MetadataNotParsed =>
         write!(f, "metadata not parsed"),
       Error::NotDone =>
