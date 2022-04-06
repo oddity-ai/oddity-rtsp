@@ -108,6 +108,16 @@ impl RequestMetadata {
 
 pub type StatusCode = usize;
 
+#[derive(Clone, PartialEq, Debug)]
+pub enum StatusCategory {
+  Informational,
+  Success,
+  Redirection,
+  ClientError,
+  ServerError,
+  Unknown,
+}
+
 #[derive(Clone, Debug)]
 pub struct ResponseMetadata {
   pub version: Version,
@@ -126,6 +136,18 @@ impl ResponseMetadata {
       version,
       status,
       reason,
+    }
+  }
+
+  pub fn status(&self) -> StatusCategory {
+    match self.status {
+      s if s >= 600 => StatusCategory::Unknown,
+      s if s >= 500 => StatusCategory::ServerError,
+      s if s >= 400 => StatusCategory::ClientError,
+      s if s >= 300 => StatusCategory::Redirection,
+      s if s >= 200 => StatusCategory::Success,
+      s if s >= 100 => StatusCategory::Informational,
+      _             => StatusCategory::Unknown,
     }
   }
 

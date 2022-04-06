@@ -391,6 +391,8 @@ mod tests {
     Buffer,
   };
 
+  use crate::StatusCategory;
+
   #[test]
   fn parse_options_request() {
     let request = br###"OPTIONS rtsp://example.com/media.mp4 RTSP/1.0
@@ -434,6 +436,7 @@ Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
     let response = ResponseParser::new().parse_bytes_and_into_response(response).unwrap();
     assert_eq!(response.metadata.version, Version::V1);
     assert_eq!(response.metadata.status, 200);
+    assert_eq!(response.metadata.status(), StatusCategory::Success);
     assert_eq!(response.metadata.reason, "OK");
     assert_eq!(response.headers.get("CSeq"), Some(&"1".to_string()));
     assert_eq!(response.headers.get("Public"), Some(&"DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE".to_string()));
@@ -449,6 +452,7 @@ CSeq: 1
     let response = ResponseParser::new().parse_bytes_and_into_response(response).unwrap();
     assert_eq!(response.metadata.version, Version::V1);
     assert_eq!(response.metadata.status, 404);
+    assert_eq!(response.metadata.status(), StatusCategory::ClientError);
     assert_eq!(response.metadata.reason, "Stream Not Found");
     assert_eq!(response.headers.get("CSeq"), Some(&"1".to_string()));
   }
