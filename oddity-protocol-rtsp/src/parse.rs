@@ -10,6 +10,7 @@ use super::{
     Version,
     StatusCode,
     Method,
+    Uri,
     Headers,
     Bytes,
   },
@@ -296,6 +297,19 @@ impl Parse for RequestMetadata {
         line: line.to_string(),
       })?
       .to_string();
+
+    let uri = uri.parse::<Uri>()
+      .map_err(|_| Error::UriMalformed {
+        line: line.to_string(),
+        uri: uri.to_string(),
+      })?;
+
+    let uri = if uri.authority().is_some() || uri.path() == "*" {
+      Ok(uri)
+    } else {
+      // Relative URI's are not allowed in RTSP.
+      Err(Error::UriNotAbsolute { uri, })
+    }?;
 
     let version = parts
       .next()

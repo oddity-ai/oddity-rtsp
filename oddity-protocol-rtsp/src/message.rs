@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+pub use http::uri::Uri;
+
 pub trait Message {
   type Metadata;
 
@@ -84,7 +86,7 @@ pub enum Version {
 #[derive(Clone, Debug)]
 pub struct RequestMetadata {
   pub method: Method,
-  pub uri: String, // TODO Uri type?
+  pub uri: Uri,
   pub version: Version,
 }
 
@@ -92,7 +94,7 @@ impl RequestMetadata {
 
   pub(super) fn new(
     method: Method,
-    uri: String,
+    uri: Uri,
     version: Version
   ) -> Self {
     Self {

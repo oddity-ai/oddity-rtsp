@@ -1,6 +1,8 @@
 use std::fmt;
 use std::error;
 
+use super::message::Uri;
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
@@ -33,6 +35,17 @@ pub enum Error {
   /// line of the head.
   UriMissing {
     line: String
+  },
+  /// The header first line has a Request-URI, but it could not be
+  /// parsed correctly.
+  UriMalformed {
+    line: String,
+    uri: String,
+  },
+  /// The Request-URI is correct, but represents a relative path,
+  /// which is not allowed in RTSP.
+  UriNotAbsolute {
+    uri: Uri,
   },
   /// The response status line has a version and status code, but is
   /// missing a reason phrase which is required.
@@ -100,6 +113,10 @@ impl fmt::Display for Error {
         write!(f, "method unknown: {} (in request line: {})", &method, &line),
       Error::UriMissing { line, } =>
         write!(f, "uri missing in request line: {}", &line),
+      Error::UriMalformed { line, uri, } =>
+        write!(f, "uri malformed: {} (in line: {})", &uri, &line),
+      Error::UriNotAbsolute { uri, } =>
+        write!(f, "uri must be absolute, but it is relative: {}", &uri),
       Error::ReasonPhraseMissing { line, } =>
         write!(f, "reason phrase missing in response line: {}", &line),
       Error::VersionMalformed { line, version, } =>
