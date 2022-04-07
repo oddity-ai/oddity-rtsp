@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 
+use super::parse::Parse;
+
 pub use http::uri::Uri;
+pub use bytes::Bytes;
 
 pub trait Message {
-  type Metadata;
+  type Metadata: Parse;
 
   fn new(
     metadata: Self::Metadata,
@@ -154,5 +157,3 @@ impl ResponseMetadata {
 }
 
 pub type Headers = HashMap<String, String>;
-
-pub type Bytes = Vec<u8>;

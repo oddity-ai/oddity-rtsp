@@ -14,7 +14,10 @@ use super::{
     Headers,
     Bytes,
   },
-  buffer::Buffer,
+  buffer::{
+    Buf,
+    ReadLine,
+  },
   error::{
     Result,
     Error,
@@ -52,7 +55,24 @@ impl<M: Message> Parser<M>
     }
   }
 
-  pub fn parse(&mut self, buffer: &mut Buffer) -> Result<Status> {
+  pub fn into(self) -> Result<M> {
+    match self.state {
+      State::Body(Body::Complete) =>
+        Ok(M::new(
+          self.metadata
+            .ok_or(Error::MetadataNotParsed)?,
+          self.headers,
+          self.body,
+        )),
+      _ =>
+        Err(Error::NotDone)
+    }
+  }
+
+  pub fn parse(
+    &mut self,
+    buffer: &mut impl Buf,
+  ) -> Result<Status> {
     self.parse_loop(buffer)?;
 
     match &self.state {
@@ -65,7 +85,10 @@ impl<M: Message> Parser<M>
     }
   }
 
-  fn parse_loop(&mut self, buffer: &mut Buffer) -> Result<()> {
+  fn parse_loop(
+    &mut self,
+    buffer: &mut impl Buf,
+  ) -> Result<()> {
     let mut again = true;
     while again {
       (self.state, again) = self.parse_inner(buffer)?;
@@ -74,7 +97,10 @@ impl<M: Message> Parser<M>
     Ok(())
   }
 
-  fn parse_inner(&mut self, buffer: &mut Buffer) -> Result<(State, Again)> {
+  fn parse_inner(
+    &mut self,
+    buffer: &mut impl Buf,
+  ) -> Result<(State, Again)> {
     match self.state {
       State::Head(head) => {
         let next_head = self.parse_inner_head(buffer, head)?;
@@ -97,7 +123,7 @@ impl<M: Message> Parser<M>
         let got = buffer.remaining();
 
         if got >= need {
-          self.body = Some(buffer.read(need));
+          self.body = Some(buffer.copy_to_bytes(need));
           Ok((State::Body(Body::Complete), false))
         } else {
           Ok((State::Body(Body::Incomplete), false))
@@ -111,7 +137,7 @@ impl<M: Message> Parser<M>
 
   fn parse_inner_head(
     &mut self,
-    buffer: &mut Buffer,
+    buffer: &mut impl Buf,
     mut head: Head,
   ) -> Result<Head> {
     while head != Head::Done {
@@ -183,34 +209,21 @@ impl<M: Message> Parser<M>
     }
   }
 
-  fn parse_bytes_and_into(mut self, bytes: Bytes) -> Result<M> {
-    let mut buffer = Buffer::from(bytes);
+  fn parse_and_into(mut self, mut buffer: impl Buf) -> Result<M> {
     self.parse(&mut buffer)?;
     self.into()
-  }
-
-  fn into(self) -> Result<M> {
-    match self.state {
-      State::Body(Body::Complete) =>
-        Ok(M::new(
-          self.metadata
-            .ok_or(Error::MetadataNotParsed)?,
-          self.headers,
-          self.body,
-        )),
-      _ =>
-        Err(Error::NotDone)
-    }
   }
 
 }
 
 impl Parser<Request> {
 
-  pub fn parse_bytes_and_into_request(self, bytes: Bytes) -> Result<Request> {
-    self.parse_bytes_and_into(bytes)
+  #[inline]
+  pub fn parse_and_into_request(self, buffer: impl Buf) -> Result<Request> {
+    self.parse_and_into(buffer)
   }
 
+  #[inline]
   pub fn into_request(self) -> Result<Request> {
     self.into()
   }
@@ -219,10 +232,12 @@ impl Parser<Request> {
 
 impl Parser<Response> {
 
-  pub fn parse_bytes_and_into_response(self, bytes: Bytes) -> Result<Response> {
-    self.parse_bytes_and_into(bytes)
+  #[inline]
+  pub fn parse_and_into_response(self, buffer: impl Buf) -> Result<Response> {
+    self.parse_and_into(buffer)
   }
 
+  #[inline]
   pub fn into_response(self) -> Result<Response> {
     self.into()
   }
@@ -380,6 +395,8 @@ fn parse_header(line: &str) -> Result<(String, String)> {
 #[cfg(test)]
 mod tests {
 
+  use bytes::BytesMut;
+
   use super::{
     Request,
     RequestParser,
@@ -388,7 +405,6 @@ mod tests {
     Version,
     Method,
     Bytes,
-    Buffer,
   };
 
   use crate::StatusCategory;
@@ -400,9 +416,9 @@ CSeq: 1
 Require: implicit-play
 Proxy-Require: gzipped-messages
 
-"###.to_vec();
+"###;
 
-    let request = RequestParser::new().parse_bytes_and_into_request(request).unwrap();
+    let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
     assert_eq!(request.metadata.method, Method::Options);
     assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
     assert_eq!(request.metadata.version, Version::V1);
@@ -416,9 +432,9 @@ Proxy-Require: gzipped-messages
     let request = br###"OPTIONS * RTSP/1.0
 CSeq: 1
 
-"###.to_vec();
+"###;
 
-    let request = RequestParser::new().parse_bytes_and_into_request(request).unwrap();
+    let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
     assert_eq!(request.metadata.method, Method::Options);
     assert_eq!(request.metadata.uri, "*");
     assert_eq!(request.metadata.version, Version::V1);
@@ -431,9 +447,9 @@ CSeq: 1
 CSeq: 1
 Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
 
-"###.to_vec();
+"###;
 
-    let response = ResponseParser::new().parse_bytes_and_into_response(response).unwrap();
+    let response = ResponseParser::new().parse_and_into_response(response.as_slice()).unwrap();
     assert_eq!(response.metadata.version, Version::V1);
     assert_eq!(response.metadata.status, 200);
     assert_eq!(response.metadata.status(), StatusCategory::Success);
@@ -447,9 +463,9 @@ Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
     let response = br###"RTSP/1.0 404 Stream Not Found
 CSeq: 1
 
-"###.to_vec();
+"###;
 
-    let response = ResponseParser::new().parse_bytes_and_into_response(response).unwrap();
+    let response = ResponseParser::new().parse_and_into_response(response.as_slice()).unwrap();
     assert_eq!(response.metadata.version, Version::V1);
     assert_eq!(response.metadata.status, 404);
     assert_eq!(response.metadata.status(), StatusCategory::ClientError);
@@ -462,9 +478,9 @@ CSeq: 1
     let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/1.0
 CSeq: 2
 
-"###.to_vec();
+"###;
 
-    let request = RequestParser::new().parse_bytes_and_into_request(request).unwrap();
+    let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
     assert_eq!(request.metadata.method, Method::Describe);
     assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
     assert_eq!(request.metadata.version, Version::V1);
@@ -476,9 +492,9 @@ CSeq: 2
     let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/2.0
 CSeq: 2
 
-"###.to_vec();
+"###;
 
-    let request = RequestParser::new().parse_bytes_and_into_request(request).unwrap();
+    let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
     assert_eq!(request.metadata.method, Method::Describe);
     assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
     assert_eq!(request.metadata.version, Version::V2);
@@ -490,9 +506,9 @@ CSeq: 2
     let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/3.0
 CSeq: 2
 
-"###.to_vec();
+"###;
 
-    let request = RequestParser::new().parse_bytes_and_into_request(request).unwrap();
+    let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
     assert_eq!(request.metadata.method, Method::Describe);
     assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
     assert_eq!(request.metadata.version, Version::Unknown);
@@ -522,9 +538,9 @@ a=length:npt=7.712000
 a=rtpmap:97 mpeg4-generic/32000/2
 a=mimetype:string;"audio/mpeg4-generic"
 a=AvgBitRate:integer;65790
-a=StreamName:string;"hinted audio track""###.to_vec();
+a=StreamName:string;"hinted audio track""###;
 
-    let response = ResponseParser::new().parse_bytes_and_into_response(response).unwrap();
+    let response = ResponseParser::new().parse_and_into_response(response.as_slice()).unwrap();
     assert_eq!(response.metadata.version, Version::V1);
     assert_eq!(response.metadata.status, 200);
     assert_eq!(response.metadata.reason, "OK");
@@ -563,7 +579,7 @@ Session: 12345678
 
   #[test]
   fn parse_pipelined_requests() {
-    let mut buffer = Buffer::from(EXAMPLE_PIPELINED_REQUESTS.to_vec());
+    let mut buffer = Bytes::from_static(EXAMPLE_PIPELINED_REQUESTS);
     let mut parser = RequestParser::new();
 
     let mut requests = Vec::new();
@@ -579,7 +595,7 @@ Session: 12345678
   
   #[test]
   fn parse_pipelined_requests_pieces1() {
-    let mut buffer = Buffer::new();
+    let mut buffer = BytesMut::new();
     let mut parser = RequestParser::new();
 
     let mut requests = Vec::new();
@@ -596,7 +612,7 @@ Session: 12345678
 
   #[test]
   fn parse_pipelined_requests_pieces_varying() {
-    let mut buffer = Buffer::new();
+    let mut buffer = BytesMut::new();
     let mut parser = RequestParser::new();
 
     let mut requests = Vec::new();
@@ -654,7 +670,7 @@ Content-Length: 16\x0d\x0a\
   #[test]
   fn parse_play_request() {
     let request = RequestParser::new()
-      .parse_bytes_and_into_request(EXAMPLE_REQUEST_PLAY_CRLN.to_vec())
+      .parse_and_into_request(EXAMPLE_REQUEST_PLAY_CRLN)
       .unwrap();
     test_example_request_play(&request);
   }
@@ -736,11 +752,11 @@ Content-Length: 16\x0d\x0a\
   }
 
   fn request_play_crln() -> Bytes {
-    EXAMPLE_REQUEST_PLAY_CRLN.to_vec()
+    Bytes::from_static(EXAMPLE_REQUEST_PLAY_CRLN)
   }
 
   fn parse_play_request_partial_piece1(request_bytes: &[u8]) {
-    let mut buffer = Buffer::new();
+    let mut buffer = BytesMut::new();
     let mut parser = RequestParser::new();
 
     let upto_last = request_bytes.len() - 1;
@@ -759,7 +775,7 @@ Content-Length: 16\x0d\x0a\
   }
   
   fn parse_play_request_partial_piece(request_bytes: &[u8], piece_size: usize) {
-    let mut buffer = Buffer::new();
+    let mut buffer = BytesMut::new();
     let mut parser = RequestParser::new();
 
     let pieces_upto_last = (request_bytes.len() / piece_size) - 1;
@@ -779,7 +795,7 @@ Content-Length: 16\x0d\x0a\
   }
 
   fn parse_play_request_partial_piece_varying(request_bytes: &[u8]) {
-    let mut buffer = Buffer::new();
+    let mut buffer = BytesMut::new();
     let mut parser = RequestParser::new();
 
     let mut start = 0;
@@ -805,7 +821,7 @@ Content-Length: 16\x0d\x0a\
     assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
     assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
     assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
-    assert_eq!(request.body, Some(b"0123456789abcdef".to_vec()));
+    assert_eq!(request.body, Some(b"0123456789abcdef".as_slice().into()));
   }
 
 }

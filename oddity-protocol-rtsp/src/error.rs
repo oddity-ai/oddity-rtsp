@@ -1,5 +1,7 @@
 use std::fmt;
 use std::error;
+use std::io;
+use std::convert;
 
 use super::message::Uri;
 
@@ -88,6 +90,8 @@ pub enum Error {
   /// This occurs when the caller tries to turn the parser into an
   /// actual request, but the parser was not ready yet.
   NotDone,
+  /// I/O error occurred.
+  Io(io::Error),
 }
 
 impl fmt::Display for Error {
@@ -130,7 +134,17 @@ impl fmt::Display for Error {
         write!(f, "metadata not parsed"),
       Error::NotDone =>
         write!(f, "parser not done yet"),
+      Error::Io(err) =>
+        write!(f, "{}", err),
     }
+  }
+
+}
+
+impl convert::From<io::Error> for Error {
+
+  fn from(error: io::Error) -> Self {
+    Error::Io(error)
   }
 
 }

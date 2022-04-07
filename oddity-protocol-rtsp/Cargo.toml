@@ -5,3 +5,9 @@ edition = "2021"
 
 [dependencies]
 http = "0.2.6"
+bytes = { version = "1" }
+tokio-util = { version = "0.7.1", default-features = false, features = ["codec"], optional = true }
+
+[features]
+default = ["tokio-codec"]
+tokio-codec = ["tokio-util"]

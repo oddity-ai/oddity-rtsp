@@ -4,6 +4,9 @@ mod message;
 mod buffer;
 mod error;
 
+#[cfg(feature = "tokio-codec")]
+mod codec;
+
 pub use parse::{
   RequestParser,
   ResponseParser,
@@ -19,8 +22,10 @@ pub use message::{
   Uri,
   Method,
 };
-pub use buffer::Buffer;
 pub use error::{
   Result,
   Error,
 };
+
+#[cfg(feature = "tokio-codec")]
+pub use codec::Codec;
