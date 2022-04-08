@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::{
   message::{
@@ -50,7 +50,7 @@ impl<M: Message> Parser<M>
     Self {
       state: State::Head(Head::FirstLine),
       metadata: None,
-      headers: HashMap::new(),
+      headers: BTreeMap::new(),
       body: None,
     }
   }
@@ -158,7 +158,7 @@ impl<M: Message> Parser<M>
 
   fn parse_inner_head_line(
     metadata: &mut Option<M::Metadata>,
-    headers: &mut HashMap<String, String>,
+    headers: &mut BTreeMap<String, String>,
     line: String,
     head: Head,
   ) -> Result<Head> {
@@ -660,11 +660,11 @@ Session: 12345678
     assert_eq!(requests[2].body, None);
   }
 
-  const EXAMPLE_REQUEST_PLAY_CRLN: &[u8] = b"PLAY rtsp://example.com/stream/0 RTSP/1.0\x0d\x0a\
-CSeq: 1\x0d\x0a\
-Session: 1234abcd\x0d\x0a\
-Content-Length: 16\x0d\x0a\
-\x0d\x0a\
+  const EXAMPLE_REQUEST_PLAY_CRLN: &[u8] = b"PLAY rtsp://example.com/stream/0 RTSP/1.0\r\n\
+CSeq: 1\r\n\
+Session: 1234abcd\r\n\
+Content-Length: 16\r\n\
+\r\n\
 0123456789abcdef";
 
   #[test]

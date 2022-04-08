@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use super::{
   parse::Parse,
@@ -18,6 +18,9 @@ pub trait Message {
   ) -> Self;
 
 }
+
+// TODO(gerwin) Builder APIs that do some stuff automatically such as setting
+//   Content-Length header and handling encoding etc.
 
 #[derive(Clone, Debug)]
 pub struct Request {
@@ -159,4 +162,4 @@ impl ResponseMetadata {
 
 }
 
-pub type Headers = HashMap<String, String>;
+pub type Headers = BTreeMap<String, String>;
