@@ -55,7 +55,7 @@ impl<M: Message> Parser<M>
     }
   }
 
-  pub fn into(self) -> Result<M> {
+  pub fn into_message(self) -> Result<M> {
     match self.state {
       State::Body(Body::Complete) =>
         Ok(M::new(
@@ -211,7 +211,7 @@ impl<M: Message> Parser<M>
 
   fn parse_and_into(mut self, mut buffer: impl Buf) -> Result<M> {
     self.parse(&mut buffer)?;
-    self.into()
+    self.into_message()
   }
 
 }
@@ -225,7 +225,7 @@ impl Parser<Request> {
 
   #[inline]
   pub fn into_request(self) -> Result<Request> {
-    self.into()
+    self.into_message()
   }
 
 }
@@ -239,7 +239,7 @@ impl Parser<Response> {
 
   #[inline]
   pub fn into_response(self) -> Result<Response> {
-    self.into()
+    self.into_message()
   }
 
 }

@@ -28,7 +28,7 @@ impl<M: Message> Decoder for Codec<M> {
         // Extract parser and replace with all new one since this one
         // is now consumed and we don't need it anymore
         let parser = std::mem::replace(&mut self.parser, Parser::<M>::new());
-        Some(parser.into()?)
+        Some(parser.into_message()?)
       },
       Status::Hungry => None,
     })
