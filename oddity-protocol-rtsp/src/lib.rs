@@ -1,5 +1,5 @@
 mod parse;
-mod write;
+mod serialize;
 mod message;
 mod buffer;
 mod error;

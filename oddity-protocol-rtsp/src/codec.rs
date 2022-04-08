@@ -7,6 +7,7 @@ use super::{
     Parser,
     Status,
   },
+  serialize::Serialize,
   message::Message,
   error::Error,
 };
@@ -36,7 +37,7 @@ impl<M: Message> Decoder for Codec<M> {
 
 }
 
-impl<M: Message> Encoder<M> for Codec<M> {
+impl<M: Message + Serialize> Encoder<M> for Codec<M> {
   type Error = Error;
 
   fn encode(
@@ -44,7 +45,7 @@ impl<M: Message> Encoder<M> for Codec<M> {
     item: M,
     dst: &mut BytesMut,
   ) -> Result<(), Self::Error> {
-    unimplemented!() // TODO
+    item.serialize(dst)
   }
 
 }

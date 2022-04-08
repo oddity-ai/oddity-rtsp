@@ -90,6 +90,9 @@ pub enum Error {
   /// This occurs when the caller tries to turn the parser into an
   /// actual request, but the parser was not ready yet.
   NotDone,
+  /// This occurs when trying to serialize a request that does not
+  /// have a known version.
+  VersionUnknown,
   /// I/O error occurred.
   Io(io::Error),
 }
@@ -134,6 +137,8 @@ impl fmt::Display for Error {
         write!(f, "metadata not parsed"),
       Error::NotDone =>
         write!(f, "parser not done yet"),
+      Error::VersionUnknown =>
+        write!(f, "response has unknown version"),
       Error::Io(err) =>
         write!(f, "{}", err),
     }

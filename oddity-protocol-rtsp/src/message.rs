@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 
-use super::parse::Parse;
+use super::{
+  parse::Parse,
+  serialize::Serialize,
+};
 
 pub use http::uri::Uri;
 pub use bytes::Bytes;
 
 pub trait Message {
-  type Metadata: Parse;
+  type Metadata: Parse + Serialize;
 
   fn new(
     metadata: Self::Metadata,
