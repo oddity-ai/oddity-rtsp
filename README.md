@@ -8,5 +8,5 @@ This repository contains an experimental RTSP implementation for use within Oddi
 
 The repo consists of a number of crates, each with their own specific function:
 
-* `oddity-rtsp-protocol`: Parser and writer for the RTSP protocol.
-* `oddity-protocol-sdp`: Parser and writer for the SDP protocol.
+* `oddity-rtsp-protocol`: Parsing and serialization for the RTSP protocol.
+* `oddity-sdp-protocol`: Parsing and serialization for the SDP protocol.
