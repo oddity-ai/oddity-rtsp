@@ -1,4 +1,7 @@
-use tokio_util::codec::{Decoder, Encoder};
+use tokio_util::codec::{
+  Decoder,
+  Encoder
+};
 
 use bytes::BytesMut;
 
@@ -8,16 +11,48 @@ use super::{
     Status,
   },
   serialize::Serialize,
-  message::Message,
+  message::{
+    Message,
+    Request,
+    Response,
+  },
   error::Error,
 };
 
-pub struct Codec<M: Message> {
-  parser: Parser<M>,
+pub trait Target {
+  type Send: Message;
+  type Receive: Message;
 }
 
-impl<M: Message> Decoder for Codec<M> {
-  type Item = M;
+pub struct AsClient;
+pub struct AsServer;
+
+impl Target for AsClient {
+  type Send = Request;
+  type Receive = Response;
+}
+
+impl Target for AsServer {
+  type Send = Response;
+  type Receive = Request;
+}
+
+pub struct Codec<T: Target> {
+  parser: Parser<T::Receive>,
+}
+
+impl<T: Target> Codec<T> {
+
+  pub fn new() -> Self {
+    Self {
+      parser: Parser::new(),
+    }
+  }
+
+}
+
+impl<T: Target> Decoder for Codec<T> {
+  type Item = T::Receive;
   type Error = Error;
 
   fn decode(
@@ -28,7 +63,7 @@ impl<M: Message> Decoder for Codec<M> {
       Status::Done => {
         // Extract parser and replace with all new one since this one
         // is now consumed and we don't need it anymore
-        let parser = std::mem::replace(&mut self.parser, Parser::<M>::new());
+        let parser = std::mem::replace(&mut self.parser, Parser::<T::Receive>::new());
         Some(parser.into_message()?)
       },
       Status::Hungry => None,
@@ -37,12 +72,14 @@ impl<M: Message> Decoder for Codec<M> {
 
 }
 
-impl<M: Message + Serialize> Encoder<M> for Codec<M> {
+impl<T: Target> Encoder<T::Send> for Codec<T>
+where T::Send: Serialize
+{
   type Error = Error;
 
   fn encode(
     &mut self,
-    item: M,
+    item: T::Send,
     dst: &mut BytesMut,
   ) -> Result<(), Self::Error> {
     item.serialize(dst)

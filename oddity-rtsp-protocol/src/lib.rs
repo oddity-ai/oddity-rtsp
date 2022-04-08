@@ -28,4 +28,9 @@ pub use error::{
 };
 
 #[cfg(feature = "tokio-codec")]
-pub use codec::Codec;
+pub use codec::{
+  Codec,
+  Target,
+  AsClient,
+  AsServer,
+};
