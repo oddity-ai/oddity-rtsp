@@ -1,0 +1,7 @@
+[package]
+name = "oddity-rtsp-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+oddity-rtsp-protocol = { path = "../oddity-rtsp-protocol" }
