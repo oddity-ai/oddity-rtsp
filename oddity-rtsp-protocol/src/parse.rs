@@ -34,7 +34,6 @@ pub enum Status {
 }
 
 pub struct Parser<M: Message>
-  where M::Metadata: Parse
 {
   state: State,
   metadata: Option<M::Metadata>,
@@ -43,7 +42,6 @@ pub struct Parser<M: Message>
 }
 
 impl<M: Message> Parser<M>
-  where M::Metadata: Parse
 {
 
   pub fn new() -> Self {

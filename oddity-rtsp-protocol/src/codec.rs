@@ -20,17 +20,18 @@ use super::{
 };
 
 pub trait Target {
-  type Send: Message;
+  type Send: Message + Serialize;
   type Receive: Message;
 }
 
 pub struct AsClient;
-pub struct AsServer;
 
 impl Target for AsClient {
   type Send = Request;
   type Receive = Response;
 }
+
+pub struct AsServer;
 
 impl Target for AsServer {
   type Send = Response;
@@ -73,7 +74,6 @@ impl<T: Target> Decoder for Codec<T> {
 }
 
 impl<T: Target> Encoder<T::Send> for Codec<T>
-where T::Send: Serialize
 {
   type Error = Error;
 

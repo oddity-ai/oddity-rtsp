@@ -4,7 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-futures = { version = "0.3" }
+tracing = "0.1"
+tracing-subscriber = { versio = "0.3", features = ["env-filter"] }
+futures = "0.3"
 tokio = { version = "1.17", features = ["full"] } # TODO cherrypick features
 tokio-util = { version = "0.7.1", default-features = false, features = ["codec"] }
 oddity-rtsp-protocol = { path = "../oddity-rtsp-protocol" }
