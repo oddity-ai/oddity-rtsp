@@ -12,6 +12,7 @@ use tokio_util::codec::Decoder;
 use oddity_rtsp_protocol::{
   Request,
   Response,
+  Headers,
   Codec,
   AsServer,
   Method,
@@ -68,7 +69,11 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
     Ok(match request.method {
       /* Stateless */
       Method::Options => {
-        unimplemented!();
+        Response::to(
+          request,
+          Headers::from([
+            ("Public".to_string(), "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN".to_string())
+          ]))
       },
       Method::Announce => {
         Response::error(405, "Method Not Allowed")

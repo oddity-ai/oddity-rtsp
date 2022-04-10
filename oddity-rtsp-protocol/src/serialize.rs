@@ -5,13 +5,13 @@ use bytes::{
 
 use super::{
   message::{
-    Request,
-    Response,
     Version,
     Method,
     StatusCode,
     Uri,
   },
+  request::Request,
+  response::Response,
   error::{
     Error,
     Result,
@@ -145,11 +145,9 @@ mod tests {
   };
 
   use crate::{
-    message::{
-      Message,
-      RequestMetadata,
-      ResponseMetadata,
-    }
+    message::Message,
+    request::RequestMetadata,
+    response::ResponseMetadata,
   };
 
   use super::{

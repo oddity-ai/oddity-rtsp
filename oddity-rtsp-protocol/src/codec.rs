@@ -11,11 +11,9 @@ use super::{
     Status,
   },
   serialize::Serialize,
-  message::{
-    Message,
-    Request,
-    Response,
-  },
+  message::Message,
+  request::Request,
+  response::Response,
   error::Error,
 };
 

@@ -1,6 +1,8 @@
 mod parse;
 mod serialize;
 mod message;
+mod request;
+mod response;
 mod buffer;
 mod error;
 
@@ -14,14 +16,15 @@ pub use parse::{
 };
 pub use message::{
   Message,
-  Request,
-  Response,
+  Headers,
   Version,
   StatusCode,
   StatusCategory,
   Uri,
   Method,
 };
+pub use request::Request;
+pub use response::Response;
 pub use error::{
   Result,
   Error,

@@ -3,16 +3,20 @@ use std::collections::BTreeMap;
 use super::{
   message::{
     Message,
-    Request,
-    RequestMetadata,
-    Response,
-    ResponseMetadata,
     Version,
     StatusCode,
     Method,
     Uri,
     Headers,
     Bytes,
+  },
+  request::{
+    Request,
+    RequestMetadata,
+  },
+  response::{
+    Response,
+    ResponseMetadata,
   },
   buffer::{
     Buf,
