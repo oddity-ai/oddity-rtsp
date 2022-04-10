@@ -6,9 +6,7 @@ use bytes::{
 use super::{
   message::{
     Request,
-    RequestMetadata,
     Response,
-    ResponseMetadata,
     Version,
     Method,
     StatusCode,
@@ -29,7 +27,13 @@ pub trait Serialize {
 impl Serialize for Request {
 
   fn serialize(self, dst: &mut BytesMut) -> Result<()> {
-    self.metadata.serialize(dst)?;
+    self.method.serialize(dst)?;
+    dst.put_u8(b' ');
+    self.uri.serialize(dst)?;
+    dst.put_u8(b' ');
+    self.version.serialize(dst)?;
+    dst.put_u8(b'\r');
+    dst.put_u8(b'\n');
 
     for (var, val) in self.headers.into_iter() {
       dst.put(format!("{}: {}\r\n", var, val).as_bytes());
@@ -40,22 +44,6 @@ impl Serialize for Request {
     if let Some(body) = self.body {
       dst.put(body);
     }
-
-    Ok(())
-  }
-
-}
-
-impl Serialize for RequestMetadata {
-
-  fn serialize(self, dst: &mut BytesMut) -> Result<()> {
-    self.method.serialize(dst)?;
-    dst.put_u8(b' ');
-    self.uri.serialize(dst)?;
-    dst.put_u8(b' ');
-    self.version.serialize(dst)?;
-    dst.put_u8(b'\r');
-    dst.put_u8(b'\n');
 
     Ok(())
   }
@@ -65,7 +53,13 @@ impl Serialize for RequestMetadata {
 impl Serialize for Response {
 
   fn serialize(self, dst: &mut BytesMut) -> Result<()> {
-    self.metadata.serialize(dst)?;
+    self.version.serialize(dst)?;
+    dst.put_u8(b' ');
+    self.status.serialize(dst)?;
+    dst.put_u8(b' ');
+    dst.put(self.reason.as_bytes());
+    dst.put_u8(b'\r');
+    dst.put_u8(b'\n');
 
     for (var, val) in self.headers.into_iter() {
       dst.put(format!("{}: {}\r\n", var, val).as_bytes());
@@ -76,22 +70,6 @@ impl Serialize for Response {
     if let Some(body) = self.body {
       dst.put(body);
     }
-
-    Ok(())
-  }
-
-}
-
-impl Serialize for ResponseMetadata {
-
-  fn serialize(self, dst: &mut BytesMut) -> Result<()> {
-    self.version.serialize(dst)?;
-    dst.put_u8(b' ');
-    self.status.serialize(dst)?;
-    dst.put_u8(b' ');
-    dst.put(self.reason.as_bytes());
-    dst.put_u8(b'\r');
-    dst.put_u8(b'\n');
 
     Ok(())
   }
@@ -166,15 +144,18 @@ mod tests {
     BytesMut,
   };
 
-  use super::{
-    super::{
+  use crate::{
+    message::{
       Message,
-    },
+      RequestMetadata,
+      ResponseMetadata,
+    }
+  };
+
+  use super::{
     Serialize,
     Request,
-    RequestMetadata,
     Response,
-    ResponseMetadata,
     Version,
     Method,
     Error,

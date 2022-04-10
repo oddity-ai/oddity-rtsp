@@ -8,8 +8,8 @@ use super::{
 pub use http::uri::Uri;
 pub use bytes::Bytes;
 
-pub trait Message {
-  type Metadata: Parse + Serialize;
+pub trait Message: Serialize {
+  type Metadata: Parse;
 
   fn new(
     metadata: Self::Metadata,
@@ -24,7 +24,9 @@ pub trait Message {
 
 #[derive(Clone, Debug)]
 pub struct Request {
-  pub metadata: RequestMetadata,
+  pub method: Method,
+  pub uri: Uri,
+  pub version: Version,
   pub headers: Headers,
   pub body: Option<Bytes>,
 }
@@ -38,7 +40,9 @@ impl Message for Request {
     body: Option<Bytes>,
   ) -> Self {
     Self {
-      metadata,
+      method: metadata.method,
+      uri: metadata.uri,
+      version: metadata.version,
       headers,
       body,
     }
@@ -48,7 +52,9 @@ impl Message for Request {
 
 #[derive(Clone, Debug)]
 pub struct Response {
-  pub metadata: ResponseMetadata,
+  pub version: Version,
+  pub status: StatusCode,
+  pub reason: String,
   pub headers: Headers,
   pub body: Option<Bytes>,
 }
@@ -62,9 +68,27 @@ impl Message for Response {
     body: Option<Bytes>,
   ) -> Self {
     Self {
-      metadata,
+      version: metadata.version,
+      status: metadata.status,
+      reason: metadata.reason,
       headers,
       body,
+    }
+  }
+
+}
+
+impl Response {
+
+  pub fn status(&self) -> StatusCategory {
+    match self.status {
+      s if s >= 600 => StatusCategory::Unknown,
+      s if s >= 500 => StatusCategory::ServerError,
+      s if s >= 400 => StatusCategory::ClientError,
+      s if s >= 300 => StatusCategory::Redirection,
+      s if s >= 200 => StatusCategory::Success,
+      s if s >= 100 => StatusCategory::Informational,
+      _             => StatusCategory::Unknown,
     }
   }
 
@@ -94,9 +118,9 @@ pub enum Version {
 
 #[derive(Clone, Debug)]
 pub struct RequestMetadata {
-  pub method: Method,
-  pub uri: Uri,
-  pub version: Version,
+  method: Method,
+  uri: Uri,
+  version: Version,
 }
 
 impl RequestMetadata {
@@ -129,9 +153,9 @@ pub enum StatusCategory {
 
 #[derive(Clone, Debug)]
 pub struct ResponseMetadata {
-  pub version: Version,
-  pub status: StatusCode,
-  pub reason: String,
+  version: Version,
+  status: StatusCode,
+  reason: String,
 }
 
 impl ResponseMetadata {
@@ -145,18 +169,6 @@ impl ResponseMetadata {
       version,
       status,
       reason,
-    }
-  }
-
-  pub fn status(&self) -> StatusCategory {
-    match self.status {
-      s if s >= 600 => StatusCategory::Unknown,
-      s if s >= 500 => StatusCategory::ServerError,
-      s if s >= 400 => StatusCategory::ClientError,
-      s if s >= 300 => StatusCategory::Redirection,
-      s if s >= 200 => StatusCategory::Success,
-      s if s >= 100 => StatusCategory::Informational,
-      _             => StatusCategory::Unknown,
     }
   }
 

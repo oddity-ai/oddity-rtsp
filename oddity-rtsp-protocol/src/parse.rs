@@ -417,9 +417,9 @@ Proxy-Require: gzipped-messages
 "###;
 
     let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
-    assert_eq!(request.metadata.method, Method::Options);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.method, Method::Options);
+    assert_eq!(request.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.version, Version::V1);
     assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
     assert_eq!(request.headers.get("Require"), Some(&"implicit-play".to_string()));
     assert_eq!(request.headers.get("Proxy-Require"), Some(&"gzipped-messages".to_string()));
@@ -433,9 +433,9 @@ CSeq: 1
 "###;
 
     let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
-    assert_eq!(request.metadata.method, Method::Options);
-    assert_eq!(request.metadata.uri, "*");
-    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.method, Method::Options);
+    assert_eq!(request.uri, "*");
+    assert_eq!(request.version, Version::V1);
     assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
   }
 
@@ -448,10 +448,10 @@ Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
 "###;
 
     let response = ResponseParser::new().parse_and_into_response(response.as_slice()).unwrap();
-    assert_eq!(response.metadata.version, Version::V1);
-    assert_eq!(response.metadata.status, 200);
-    assert_eq!(response.metadata.status(), StatusCategory::Success);
-    assert_eq!(response.metadata.reason, "OK");
+    assert_eq!(response.version, Version::V1);
+    assert_eq!(response.status, 200);
+    assert_eq!(response.status(), StatusCategory::Success);
+    assert_eq!(response.reason, "OK");
     assert_eq!(response.headers.get("CSeq"), Some(&"1".to_string()));
     assert_eq!(response.headers.get("Public"), Some(&"DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE".to_string()));
   }
@@ -464,10 +464,10 @@ CSeq: 1
 "###;
 
     let response = ResponseParser::new().parse_and_into_response(response.as_slice()).unwrap();
-    assert_eq!(response.metadata.version, Version::V1);
-    assert_eq!(response.metadata.status, 404);
-    assert_eq!(response.metadata.status(), StatusCategory::ClientError);
-    assert_eq!(response.metadata.reason, "Stream Not Found");
+    assert_eq!(response.version, Version::V1);
+    assert_eq!(response.status, 404);
+    assert_eq!(response.status(), StatusCategory::ClientError);
+    assert_eq!(response.reason, "Stream Not Found");
     assert_eq!(response.headers.get("CSeq"), Some(&"1".to_string()));
   }
 
@@ -479,9 +479,9 @@ CSeq: 2
 "###;
 
     let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
-    assert_eq!(request.metadata.method, Method::Describe);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.method, Method::Describe);
+    assert_eq!(request.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.version, Version::V1);
     assert_eq!(request.headers.get("CSeq"), Some(&"2".to_string()));
   }
 
@@ -493,9 +493,9 @@ CSeq: 2
 "###;
 
     let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
-    assert_eq!(request.metadata.method, Method::Describe);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(request.metadata.version, Version::V2);
+    assert_eq!(request.method, Method::Describe);
+    assert_eq!(request.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.version, Version::V2);
     assert_eq!(request.headers.get("CSeq"), Some(&"2".to_string()));
   }
 
@@ -507,9 +507,9 @@ CSeq: 2
 "###;
 
     let request = RequestParser::new().parse_and_into_request(request.as_slice()).unwrap();
-    assert_eq!(request.metadata.method, Method::Describe);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(request.metadata.version, Version::Unknown);
+    assert_eq!(request.method, Method::Describe);
+    assert_eq!(request.uri, "rtsp://example.com/media.mp4");
+    assert_eq!(request.version, Version::Unknown);
     assert_eq!(request.headers.get("CSeq"), Some(&"2".to_string()));
   }
 
@@ -539,9 +539,9 @@ a=AvgBitRate:integer;65790
 a=StreamName:string;"hinted audio track""###;
 
     let response = ResponseParser::new().parse_and_into_response(response.as_slice()).unwrap();
-    assert_eq!(response.metadata.version, Version::V1);
-    assert_eq!(response.metadata.status, 200);
-    assert_eq!(response.metadata.reason, "OK");
+    assert_eq!(response.version, Version::V1);
+    assert_eq!(response.status, 200);
+    assert_eq!(response.reason, "OK");
     assert_eq!(response.headers.get("CSeq"), Some(&"2".to_string()));
     assert_eq!(response.headers.get("Content-Base"), Some(&"rtsp://example.com/media.mp4".to_string()));
     assert_eq!(response.headers.get("Content-Type"), Some(&"application/sdp".to_string()));
@@ -635,24 +635,24 @@ Session: 12345678
 
   fn test_example_piplined_requests(requests: &[Request]) {
     assert_eq!(requests.len(), 3);
-    assert_eq!(requests[0].metadata.method, Method::Record);
-    assert_eq!(requests[0].metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(requests[0].metadata.version, Version::V1);
+    assert_eq!(requests[0].method, Method::Record);
+    assert_eq!(requests[0].uri, "rtsp://example.com/media.mp4");
+    assert_eq!(requests[0].version, Version::V1);
     assert_eq!(requests[0].headers.get("CSeq"), Some(&"6".to_string()));
     assert_eq!(requests[0].headers.get("Session"), Some(&"12345678".to_string()));
     assert_eq!(requests[0].body, None);
-    assert_eq!(requests[1].metadata.method, Method::Announce);
-    assert_eq!(requests[1].metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(requests[1].metadata.version, Version::V1);
+    assert_eq!(requests[1].method, Method::Announce);
+    assert_eq!(requests[1].uri, "rtsp://example.com/media.mp4");
+    assert_eq!(requests[1].version, Version::V1);
     assert_eq!(requests[1].headers.get("CSeq"), Some(&"7".to_string()));
     assert_eq!(requests[1].headers.get("Session"), Some(&"12345678".to_string()));
     assert_eq!(requests[1].headers.get("Date"), Some(&"23 Jan 1997 15:35:06 GMT".to_string()));
     assert_eq!(requests[1].headers.get("Content-Type"), Some(&"application/sdp".to_string()));
     assert_eq!(requests[1].headers.get("Content-Length"), Some(&"305".to_string()));
     assert_eq!(requests[1].body.as_ref().unwrap().len(), 305);
-    assert_eq!(requests[2].metadata.method, Method::Teardown);
-    assert_eq!(requests[2].metadata.uri, "rtsp://example.com/media.mp4");
-    assert_eq!(requests[2].metadata.version, Version::V1);
+    assert_eq!(requests[2].method, Method::Teardown);
+    assert_eq!(requests[2].uri, "rtsp://example.com/media.mp4");
+    assert_eq!(requests[2].version, Version::V1);
     assert_eq!(requests[2].headers.get("CSeq"), Some(&"8".to_string()));
     assert_eq!(requests[2].headers.get("Session"), Some(&"12345678".to_string()));
     assert_eq!(requests[2].body, None);
@@ -813,9 +813,9 @@ Content-Length: 16\r\n\
   }
 
   fn test_example_request_play(request: &Request) {
-    assert_eq!(request.metadata.method, Method::Play);
-    assert_eq!(request.metadata.uri, "rtsp://example.com/stream/0");
-    assert_eq!(request.metadata.version, Version::V1);
+    assert_eq!(request.method, Method::Play);
+    assert_eq!(request.uri, "rtsp://example.com/stream/0");
+    assert_eq!(request.version, Version::V1);
     assert_eq!(request.headers.get("CSeq"), Some(&"1".to_string()));
     assert_eq!(request.headers.get("Session"), Some(&"1234abcd".to_string()));
     assert_eq!(request.headers.get("Content-Length"), Some(&"16".to_string()));
