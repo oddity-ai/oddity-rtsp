@@ -12,12 +12,13 @@ mod codec;
 pub use parse::{
   RequestParser,
   ResponseParser,
-  Status,
+  Status as ParserStatus,
 };
 pub use message::{
   Message,
   Headers,
   Version,
+  Status,
   StatusCode,
   StatusCategory,
   Uri,

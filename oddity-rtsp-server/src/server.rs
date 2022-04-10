@@ -12,7 +12,7 @@ use tokio_util::codec::Decoder;
 use oddity_rtsp_protocol::{
   Request,
   Response,
-  Headers,
+  Status,
   Codec,
   AsServer,
   Method,
@@ -69,23 +69,31 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
     Ok(match request.method {
       /* Stateless */
       Method::Options => {
-        Response::to(
-          request,
-          Headers::from([
-            ("Public".to_string(), "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN".to_string())
-          ]))
+        Response::ok()
+          .with_cseq_of(request)
+          .with_header("Public", "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN")
+          .build()
       },
       Method::Announce => {
-        Response::error(405, "Method Not Allowed")
+        tracing::warn!("client sent unsupported request: ANNOUNCE");
+        Response::error(Status::MethodNotAllowed)
+          .with_cseq_of(request)
+          .build()
       },
       Method::Describe => {
         unimplemented!();
       },
       Method::GetParameter => {
-        Response::error(405, "Method Not Allowed")
+        tracing::warn!("client sent unsupported request: GET_PARAMETER");
+        Response::error(Status::MethodNotAllowed)
+          .with_cseq_of(request)
+          .build()
       },
       Method::SetParameter => {
-        Response::error(405, "Method Not Allowed")
+        tracing::warn!("client sent unsupported request: SET_PARAMETER");
+        Response::error(Status::MethodNotAllowed)
+          .with_cseq_of(request)
+          .build()
       },
       /* Stateful */
       Method::Setup => {
@@ -95,10 +103,16 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
         unimplemented!();
       },
       Method::Pause => {
-        Response::error(405, "Method Not Allowed")
+        tracing::warn!("client sent unsupported request: PAUSE");
+        Response::error(Status::MethodNotAllowed)
+          .with_cseq_of(request)
+          .build()
       },
       Method::Record => {
-        Response::error(405, "Method Not Allowed")
+        tracing::warn!("client sent unsupported request: RECORD");
+        Response::error(Status::MethodNotAllowed)
+          .with_cseq_of(request)
+          .build()
       },
       Method::Teardown => {
         unimplemented!();
@@ -110,7 +124,9 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
         tracing::warn!(
           "client tried redirect in request to server; \
            does client think it is server?");
-        Response::error(455, "Method Not Valid in This State")
+        Response::error(Status::MethodNotValidInThisState)
+          .with_cseq_of(request)
+          .build()
       },
     })
   }

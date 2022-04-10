@@ -6,8 +6,11 @@ use super::{
     Headers,
     Bytes,
     Version,
+    Status,
     StatusCode,
     StatusCategory,
+    status_to_code,
+    status_to_reason,
   },
   request::Request,
 };
@@ -42,34 +45,12 @@ impl Message for Response {
 
 impl Response {
 
-  pub fn to(
-    request: &Request,
-    mut headers: Headers,
-  ) -> Response {
-    if let Some(val) = request.headers.get("CSeq") {
-      headers.insert("CSeq".to_string(), val.clone());
-    }
-    
-    Response {
-      version: Default::default(),
-      status: 200,
-      reason: "OK".to_string(),
-      headers,
-      body: Default::default(),
-    }
+  pub fn ok() -> ResponseBuilder {
+    ResponseBuilder::ok()
   }
 
-  pub fn error(
-    status: StatusCode,
-    reason: &str,
-  ) -> Response {
-    Response {
-      version: Default::default(),
-      status,
-      reason: reason.to_string(),
-      headers: Default::default(),
-      body: Default::default(),
-    }
+  pub fn error(status: Status) -> ResponseBuilder {
+    ResponseBuilder::error(status)
   }
 
   pub fn status(&self) -> StatusCategory {
@@ -127,6 +108,65 @@ impl ResponseMetadata {
       status,
       reason,
     }
+  }
+
+}
+
+pub struct ResponseBuilder {
+  response: Response,
+}
+
+impl ResponseBuilder {
+
+  pub fn from_status(status: Status) -> ResponseBuilder {
+    ResponseBuilder {
+      response: Response {
+        version: Default::default(),
+        status: status_to_code(status),
+        reason: status_to_reason(status).to_string(),
+        headers: Default::default(),
+        body: Default::default(),
+      }
+    }
+  }
+
+  pub fn ok() -> ResponseBuilder {
+    Self::from_status(Status::Ok)
+  }
+
+  pub fn error(status: Status) -> ResponseBuilder {
+    Self::from_status(status)
+  }
+
+  pub fn with_cseq_of(
+    mut self,
+    request: &Request
+  ) -> ResponseBuilder {
+    if let Some(cseq) = request.headers.get("CSeq") {
+      self.response.headers.insert("CSeq".to_string(), cseq.to_string());
+    }
+    self
+  }
+
+  pub fn with_header(
+    mut self,
+    var: impl ToString,
+    val: impl ToString,
+  ) -> ResponseBuilder {
+    self.response.headers.insert(var.to_string(), val.to_string());
+    self
+  }
+
+  pub fn with_body(
+    mut self,
+    body: Bytes,
+  ) -> ResponseBuilder {
+    self.response.body = Some(body);
+    self
+  }
+
+  pub fn build(self) -> Response {
+    self.response
   }
 
 }
