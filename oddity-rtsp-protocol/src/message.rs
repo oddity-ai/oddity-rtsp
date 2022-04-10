@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt;
 
 use super::{
   parse::Parse,
@@ -20,7 +21,8 @@ pub trait Message: Serialize {
 }
 
 // TODO(gerwin) Builder APIs that do some stuff automatically such as setting
-//   Content-Length header and handling encoding etc.
+//  Content-Length header and handling encoding etc. Also need pre-set values
+//  for error responses.
 
 #[derive(Clone, Debug)]
 pub struct Request {
@@ -46,6 +48,28 @@ impl Message for Request {
       headers,
       body,
     }
+  }
+
+}
+
+impl fmt::Display for Request {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    writeln!(f, "Version: {}, Method: {}, Uri: {}",
+      self.version,
+      self.method,
+      self.uri)?;
+
+    writeln!(f, "Headers:")?;
+    for (var, val) in &self.headers {
+      writeln!(f, " - {}: {}", &var, &val)?;
+    }
+
+    if let Some(body) = &self.body {
+      writeln!(f, "[{} bytes]", body.len())?;
+    }
+
+    Ok(())
   }
 
 }
@@ -80,6 +104,19 @@ impl Message for Response {
 
 impl Response {
 
+  pub fn error(
+    status: StatusCode,
+    reason: &str,
+  ) -> Response {
+    Response {
+      version: Default::default(),
+      status,
+      reason: reason.to_string(),
+      headers: Default::default(),
+      body: Default::default(),
+    }
+  }
+
   pub fn status(&self) -> StatusCategory {
     match self.status {
       s if s >= 600 => StatusCategory::Unknown,
@@ -90,6 +127,28 @@ impl Response {
       s if s >= 100 => StatusCategory::Informational,
       _             => StatusCategory::Unknown,
     }
+  }
+
+}
+
+impl fmt::Display for Response {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    writeln!(f, "Version: {}, Status Code: {}, Reason Phrase: {}",
+      self.version,
+      self.status,
+      &self.reason)?;
+
+    writeln!(f, "Headers:")?;
+    for (var, val) in &self.headers {
+      writeln!(f, " - {}: {}", &var, &val)?;
+    }
+
+    if let Some(body) = &self.body {
+      writeln!(f, "[{} bytes]", body.len())?;
+    }
+
+    Ok(())
   }
 
 }
@@ -109,11 +168,52 @@ pub enum Method {
   SetParameter,
 }
 
+impl fmt::Display for Method {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Method::Describe     => write!(f, "DESCRIBE"),
+      Method::Announce     => write!(f, "ANNOUNCE"),
+      Method::Setup        => write!(f, "SETUP"),
+      Method::Play         => write!(f, "PLAY"),
+      Method::Pause        => write!(f, "PAUSE"),
+      Method::Record       => write!(f, "RECORD"),
+      Method::Options      => write!(f, "OPTIONS"),
+      Method::Redirect     => write!(f, "REDIRECT"),
+      Method::Teardown     => write!(f, "TEARDOWN"),
+      Method::GetParameter => write!(f, "GET_PARAMETER"),
+      Method::SetParameter => write!(f, "SET_PARAMETER"),
+    }
+  }
+
+}
+
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub enum Version {
   V1,
   V2,
   Unknown,
+}
+
+impl Default for Version {
+
+  #[inline]
+  fn default() -> Version {
+    Version::V1
+  }
+
+}
+
+impl fmt::Display for Version {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Version::V1      => write!(f, "1.0"),
+      Version::V2      => write!(f, "2.0"),
+      Version::Unknown => write!(f, "?"),
+    }
+  }
+
 }
 
 #[derive(Clone, Debug)]
