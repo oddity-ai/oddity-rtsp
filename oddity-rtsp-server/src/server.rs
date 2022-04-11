@@ -37,7 +37,7 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
 
     loop {
       let (socket, addr) = listener.accept().await?;
-      tracing::trace!("accepted client: {}", addr);
+      tracing::trace!(%addr, "accepted client");
       tokio::spawn(Self::handle_client(socket));
     }
   }
@@ -48,16 +48,16 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
   ) {
     let mut framed = Codec::<AsServer>::new().framed(socket);
     while let Some(Ok(request)) = framed.next().await {
-      tracing::trace!("C->S: {}", &request);
+      tracing::trace!(%request, "C->S");
       match Self::handle_request(&request).await {
         Ok(response) => {
-          tracing::trace!("S->C: {}", &response);
+          tracing::trace!(%response, "S->C");
           if let Err(err) = framed.send(response).await {
-            tracing::error!("error trying to send response: {}", err);
+            tracing::error!(%err, "error trying to send response");
           }
         },
         Err(err) => {
-          tracing::error!("error handling request: {}", err);
+          tracing::error!(%err, "error handling request");
         },
       }
     }
@@ -122,6 +122,7 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
       // not the other way around.
       Method::Redirect => {
         tracing::warn!(
+          %request,
           "client tried redirect in request to server; \
            does client think it is server?");
         Response::error(Status::MethodNotValidInThisState)
