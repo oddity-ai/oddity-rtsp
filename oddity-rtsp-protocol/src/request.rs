@@ -42,14 +42,16 @@ impl Message for Request {
 impl fmt::Display for Request {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    writeln!(f, "Version: {}, Method: {}, Uri: {}",
+    write!(f, "Version: {}, Method: {}, Uri: {}",
       self.version,
       self.method,
       self.uri)?;
 
-    writeln!(f, "Headers:")?;
-    for (var, val) in &self.headers {
-      writeln!(f, " - {}: {}", &var, &val)?;
+    if !self.headers.is_empty() {
+      writeln!(f, "\nHeaders:")?;
+      for (var, val) in &self.headers {
+        writeln!(f, " - {}: {}", &var, &val)?;
+      }
     }
 
     if let Some(body) = &self.body {

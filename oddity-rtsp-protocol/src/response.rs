@@ -70,14 +70,16 @@ impl Response {
 impl fmt::Display for Response {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    writeln!(f, "Version: {}, Status Code: {}, Reason Phrase: {}",
+    write!(f, "Version: {}, Status Code: {}, Reason Phrase: {}",
       self.version,
       self.status,
       &self.reason)?;
 
-    writeln!(f, "Headers:")?;
-    for (var, val) in &self.headers {
-      writeln!(f, " - {}: {}", &var, &val)?;
+    if !self.headers.is_empty() {
+      writeln!(f, "\nHeaders:")?;
+      for (var, val) in &self.headers {
+        writeln!(f, " - {}: {}", &var, &val)?;
+      }
     }
 
     if let Some(body) = &self.body {

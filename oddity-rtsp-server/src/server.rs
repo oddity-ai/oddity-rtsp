@@ -63,6 +63,7 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
     }
   }
 
+  #[tracing::instrument]
   async fn handle_request(
     request: &Request,
   ) -> Result<Response, Box<dyn Error + Send>> {
