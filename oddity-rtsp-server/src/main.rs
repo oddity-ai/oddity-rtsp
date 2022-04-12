@@ -37,6 +37,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
   tracing::info!(%media_controller, "initialized media controller");
 
-  let server = Server::new(("localhost", 5554));
+  let server = Server::new((settings.server.host, settings.server.port));
   server.run().await
 }

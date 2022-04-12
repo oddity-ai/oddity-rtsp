@@ -16,21 +16,32 @@ pub enum MediaKind {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct Settings {
+  pub server: Server,
+  pub media: Vec<MediaItem>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Server {
+  pub host: String,
+  pub port: u16,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct MediaItem {
   pub kind: MediaKind,
   pub path: String,
   pub uri: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct Settings {
-  pub media: Vec<MediaItem>,
-}
-
 impl Default for Settings {
 
   fn default() -> Self {
     Self {
+      server: Server {
+        host: "127.0.0.1".to_string(),
+        port: 554,
+      },
       media: Vec::new(),
     }
   }
