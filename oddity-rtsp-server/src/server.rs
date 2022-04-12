@@ -63,6 +63,15 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
     }
   }
 
+  /*
+  General:
+  - https://www.ffmpeg.org/doxygen/2.8/rtspenc_8c_source.html
+  - https://github.com/oddity-ai/oddity-rtsp-server/blob/master/rtsp/server.c
+
+  How to open RTP muxer and specify the port:
+  - https://ffmpeg.org/doxygen/2.1/rtpproto_8c.html#a4c0a351ea40886cc7efd4c4483b9d6a1
+  */
+
   #[tracing::instrument]
   async fn handle_request(
     request: &Request,
@@ -72,7 +81,9 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
       Method::Options => {
         Response::ok()
           .with_cseq_of(request)
-          .with_header("Public", "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN")
+          .with_header(
+            "Public",
+            "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN")
           .build()
       },
       Method::Announce => {
@@ -119,8 +130,8 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
         unimplemented!();
       },
       /* Invalid */
-      // Request with method REDIRECT can only be sent from Server->Client,
-      // not the other way around.
+      // Request with method REDIRECT can only be sent from server to
+      // client, not the other way around.
       Method::Redirect => {
         tracing::warn!(
           %request,
