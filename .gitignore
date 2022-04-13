@@ -1070,3 +1070,5 @@ Mkfile.old
 dkms.conf
 
 .justfile
+
+.vscode
