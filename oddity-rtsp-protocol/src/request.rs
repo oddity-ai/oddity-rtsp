@@ -58,10 +58,16 @@ impl Request {
       .get("Accept")
       .map(|val| val
         .split(",")
-        .map(|x| x.trim())
+        .map(|part| part.trim())
         .collect::<Vec<_>>()
       )
       .unwrap_or_default()
+  }
+
+  pub fn session(&self) -> Option<&str> {
+    self.headers
+      .get("Session")
+      .map(|val| val.as_str())
   }
 
 }

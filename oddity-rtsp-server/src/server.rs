@@ -129,7 +129,30 @@ async fn handle_request(
       },
       /* Stateful */
       Method::Setup => {
-        unimplemented!();
+        if request.session().is_none() {
+          // 1. If client passed Session ID and media item is already in playing state
+          //    then the client is trying to change transport parameters. We must respond
+          //    negatively with 455 Method Not Valid In This State.
+          //
+          //    (We can also choose to ignore aggregate control on SETUP by always returning
+          //     459 Aggregate Operation Not Allowed if the client has set Session at all
+          //     times.)
+          //
+          //    X
+          //
+          // 2. Register a session with a newly generated Session ID.
+          //
+          // 3. Parse permissable Transport header and generate a workable Transport header
+          //    from our side. This requires setting up the stream most likely to generate
+          //    correct RTP/RTCP client and server port tuples.
+          unimplemented!();
+        } else {
+          // RFC specification allows negatively responding to SETUP request with Session
+          // IDs by responding with 459 Aggregate Operation Not Allowed. By handling this
+          // here we don't have to deal with clients trying to change transport parameters
+          // on media items that are already playing.
+          reply_aggregate_operation_not_allowed(request)
+        }
       },
       Method::Play => {
         unimplemented!();
@@ -253,6 +276,18 @@ fn reply_not_found(
     path = request.path(),
     "path not registered as media item");
   Response::error(Status::NotFound)
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_aggregate_operation_not_allowed(
+  request: &Request,
+) -> Response {
+  tracing::debug!(
+    %request,
+    "refusing to do aggregate request");
+  Response::error(Status::AggregateOperationNotAllowed)
     .with_cseq_of(request)
     .build()
 }
