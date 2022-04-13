@@ -159,12 +159,23 @@ impl ResponseBuilder {
     self
   }
 
+  // TODO: Note user should set Content-Type themselves!
   pub fn with_body(
     mut self,
     body: Bytes,
   ) -> ResponseBuilder {
+    self = self.with_header("Content-Length", body.len());
     self.response.body = Some(body);
     self
+  }
+
+  pub fn with_sdp(
+    self,
+    contents: String,
+  ) -> ResponseBuilder {
+    self
+      .with_body(Bytes::from(contents))
+      .with_header("Content-Type", "application/sdp")
   }
 
   pub fn build(self) -> Response {

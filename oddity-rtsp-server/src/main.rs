@@ -5,6 +5,7 @@ mod settings;
 use std::error::Error;
 use std::env::args;
 use std::path::Path;
+use std::sync::Arc;
 
 use settings::{Settings, MediaKind};
 use media::{MediaController, Source, Multiplexer};
@@ -37,6 +38,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
   tracing::info!(%media_controller, "initialized media controller");
 
-  let server = Server::new((settings.server.host, settings.server.port));
+  let media_controller = Arc::new(media_controller);
+  let server = Server::new(
+    (settings.server.host, settings.server.port),
+    &media_controller);
   server.run().await
 }

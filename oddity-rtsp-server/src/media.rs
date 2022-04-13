@@ -53,6 +53,14 @@ impl MediaController {
     let _ = self.store.insert(path.to_string(), source);
   }
 
+  pub fn query_source_sdp(
+    &self,
+    path: &str,
+  ) -> Option<String> {
+    // TODO
+    None
+  }
+
 }
 
 impl fmt::Display for MediaController {

@@ -41,6 +41,12 @@ impl Message for Request {
 
 impl Request {
 
+  pub fn path(&self) -> &str {
+    self.uri
+      .path()
+      .trim_end_matches('/')
+  }
+
   pub fn require(&self) -> Option<&str> {
     self.headers
       .get("Require")
