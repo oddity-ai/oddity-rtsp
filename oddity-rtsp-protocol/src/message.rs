@@ -141,7 +141,7 @@ pub enum Status {
   ServiceUnavailable,
   GatewayTimeout,
   RTSPVersionNotSupported,
-  OptionNotSupport,
+  OptionNotSupported,
 }
 
 pub(crate) fn status_to_code(status: Status) -> StatusCode {
@@ -188,7 +188,7 @@ pub(crate) fn status_to_code(status: Status) -> StatusCode {
     Status::ServiceUnavailable            => 503,
     Status::GatewayTimeout                => 504,
     Status::RTSPVersionNotSupported       => 505,
-    Status::OptionNotSupport              => 551,
+    Status::OptionNotSupported            => 551,
   }
 }
 
@@ -236,6 +236,6 @@ pub(crate) fn status_to_reason(status: Status) -> &'static str {
     Status::ServiceUnavailable            => "Service Unavailable",
     Status::GatewayTimeout                => "Gateway Timeout",
     Status::RTSPVersionNotSupported       => "RTSP Version Not Supported",
-    Status::OptionNotSupport              => "Option Not Support",
+    Status::OptionNotSupported            => "Option Not Supported",
   }
 }
