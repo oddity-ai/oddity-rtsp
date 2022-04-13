@@ -1,5 +1,6 @@
 mod server;
 mod media;
+mod multiplexer;
 mod settings;
 
 use std::error::Error;
@@ -8,7 +9,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use settings::{Settings, MediaKind};
-use media::{MediaController, Source, Multiplexer};
+use media::{MediaController, Source};
+use multiplexer::Multiplexer;
 use server::Server;
 
 #[tokio::main]

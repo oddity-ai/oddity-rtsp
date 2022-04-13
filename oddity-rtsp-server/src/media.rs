@@ -1,7 +1,7 @@
 use std::fmt;
 use std::collections::HashMap;
 
-use oddity_rtsp_protocol::Uri;
+use super::multiplexer::Multiplexer;
 
 pub enum Source {
   Multiplex(Multiplexer)
@@ -11,23 +11,7 @@ impl fmt::Display for Source {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      Source::Multiplex(Multiplexer { uri }) =>
-        write!(f, "multiplex from source: {}", uri),
-    }
-  }
-
-}
-
-pub struct Multiplexer {
-  /// Source URI from which to read and multiplex stream.
-  uri: Uri,
-}
-
-impl Multiplexer {
-
-  pub fn new(uri: Uri) -> Multiplexer {
-    Self {
-      uri,
+      Source::Multiplex(multiplexer) => multiplexer.fmt(f),
     }
   }
 
@@ -60,6 +44,32 @@ impl MediaController {
     // TODO
     None
   }
+
+  // TODO Implement
+  // pub fn play(
+  //   &self,
+  //   session,
+  //   path: &str,
+  // ) -> Result {
+  // }
+
+  // TODO Implement
+  // pub fn pause(
+  //   &self,
+  //   session,
+  //   path: &str,
+  // ) -> Result {
+  // }
+
+  // TODO Implement
+  // // TODO If possible we should just make this a no-op and
+  // //   do all cleaning up automagically.
+  // pub fn cleanup(
+  //   &self,
+  //   session,
+  //   path: &str,
+  // ) -> Result {
+  // }
 
 }
 
