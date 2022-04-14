@@ -1,5 +1,5 @@
 use std::fmt;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use super::multiplexer::Multiplexer;
 
@@ -17,15 +17,60 @@ impl fmt::Display for Source {
 
 }
 
-pub struct MediaController {
-  store: HashMap<String, Source>,
+pub struct Session<'session> {
+  state: State,
+  source: &'session mut Source,
 }
 
-impl MediaController {
+impl Session<'_> {
+  const SESSION_ID_LEN: usize = 16;
+
+  pub fn generate_id() -> String {
+    rand::thread_rng()
+      .sample_iter(&rand::distributions::Alphanumeric)
+      .take(Self::SESSION_ID_LEN)
+      .map(char::from)
+      .collect()
+  }
+
+}
+
+impl fmt::Display for Session<'_> {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{} ({})", self.state, self.source)
+  }
+
+}
+
+#[derive(Debug)]
+pub enum State {
+  Init,
+  Playing,
+}
+
+impl fmt::Display for State {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      State::Init => write!(f, "initialization"),
+      State::Playing => write!(f, "playing"),
+    }
+  }
+
+}
+
+pub struct MediaController<'scope> {
+  sources: HashMap<String, Source>,
+  sessions: HashMap<String, Session<'scope>>,
+}
+
+impl<'scope> MediaController<'scope> {
 
   pub fn new() -> Self {
     Self {
-      store: Default::default(),
+      sources: Default::default(),
+      sessions: Default::default(),
     }
   }
 
@@ -34,7 +79,7 @@ impl MediaController {
     path: &str,
     source: Source,
   ) {
-    let _ = self.store.insert(path.to_string(), source);
+    let _ = self.sources.insert(path.to_string(), source);
   }
 
   pub fn query_source_sdp(
@@ -43,6 +88,25 @@ impl MediaController {
   ) -> Option<String> {
     // TODO
     None
+  }
+
+  pub fn register_session(
+    &mut self,
+    path: &str,
+  ) -> Result<(String, &'scope Session<'scope>), RegisterSessionError> {
+    if let Some(source) = self.sources.get_mut(path) {
+      let session_id = Session::generate_id();
+      if let Entry::Vacant(entry) = self.sessions.entry(session_id) {
+        entry.insert(Session {
+          state: State::Init,
+          source,
+        })
+      } else {
+        Err(RegisterSessionError::AlreadyExists)
+      }
+    } else {
+      Err(RegisterSessionError::NotFound)
+    }
   }
 
   // TODO Implement
@@ -73,14 +137,23 @@ impl MediaController {
 
 }
 
-impl fmt::Display for MediaController {
+impl fmt::Display for MediaController<'_> {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    writeln!(f, "Registered sources:")?;
-    for (var, val) in self.store.iter() {
-      writeln!(f, " - {}: {}", var, val)?;
+    writeln!(f, "sources:")?;
+    for (path, source) in self.sources.iter() {
+      writeln!(f, " - {}: {}", path, source)?;
+    }
+    writeln!(f, "sessions:")?;
+    for (id, session) in self.sessions.iter() {
+      writeln!(f, " - {}: {}", id, session)?;
     }
     Ok(())
   }
 
+}
+
+pub enum RegisterSessionError {
+  NotFound,
+  AlreadyExists,
 }

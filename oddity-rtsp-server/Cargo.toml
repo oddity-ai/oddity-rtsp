@@ -11,4 +11,5 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }
 config = { version = "0.13", default-features = false, features = ["yaml"] }
+rand = "0.8"
 oddity-rtsp-protocol = { path = "../oddity-rtsp-protocol" }
