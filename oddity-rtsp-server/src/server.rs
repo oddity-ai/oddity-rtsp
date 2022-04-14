@@ -43,6 +43,11 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
   ) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(&self.addrs).await?;
 
+    // TODO This whole multi-threaded thing is great and all, but *NOT*
+    //   having guaranteed ordering of the handling of incoming requests
+    //   can easily break some of the assumptions of the RTSP protocol.
+    //   We might need to see if this is true in our case, and if the
+    //   easier option is to simply handle requests sequentially.
     loop {
       let (socket, addr) = listener.accept().await?;
       tracing::trace!(%addr, "accepted client");
@@ -108,7 +113,7 @@ async fn handle_request(
       },
       Method::Describe => {
         if is_request_one_of_content_types_supported(request) {
-          if let Some(media_sdp) = media.query_source_sdp(request.path()) {
+          if let Some(media_sdp) = media.query_sdp(request.path()) {
             reply_to_describe_with_media_sdp(request, media_sdp.clone())
           } else {
             reply_not_found(request)

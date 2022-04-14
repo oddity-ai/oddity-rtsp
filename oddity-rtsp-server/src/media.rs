@@ -1,28 +1,33 @@
 use std::fmt;
 use std::collections::{HashMap, hash_map::Entry};
 
-use super::multiplexer::Multiplexer;
+use oddity_rtsp_protocol::Uri;
 
-pub enum Source {
-  Multiplex(Multiplexer)
+use crate::transmux::{Transmux, FileLoop}; // TODO cleanup
+
+pub enum MediaDescriptor {
+  Multiplexer {
+    url: Uri,
+  },
+  // TODO
 }
 
-impl fmt::Display for Source {
+impl fmt::Display for MediaDescriptor {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      Source::Multiplex(multiplexer) => multiplexer.fmt(f),
+      MediaDescriptor::Multiplexer { url } =>
+        write!(f, "multiplexer: {}", url),
     }
   }
 
 }
 
-pub struct Session<'session> {
+pub struct Session {
   state: State,
-  source: &'session mut Source,
 }
 
-impl Session<'_> {
+impl Session {
   const SESSION_ID_LEN: usize = 16;
 
   pub fn generate_id() -> String {
@@ -35,10 +40,10 @@ impl Session<'_> {
 
 }
 
-impl fmt::Display for Session<'_> {
+impl fmt::Display for Session {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{} ({})", self.state, self.source)
+    write!(f, "{} ({})", self.state, /* TODO */)
   }
 
 }
@@ -47,6 +52,7 @@ impl fmt::Display for Session<'_> {
 pub enum State {
   Init,
   Playing,
+  // TODO See RFC
 }
 
 impl fmt::Display for State {
@@ -60,29 +66,32 @@ impl fmt::Display for State {
 
 }
 
-pub struct MediaController<'scope> {
-  sources: HashMap<String, Source>,
-  sessions: HashMap<String, Session<'scope>>,
+pub struct MediaController {
+  descriptors: HashMap<String, MediaDescriptor>,
+  sessions: HashMap<String, &dyn Servicable>,
+  service_file_loops: Service<FileLoop>,
+  service_streams: Service<Stream>,
+  service_stream_multiplexers: Service<StreamMultiplex>,
 }
 
-impl<'scope> MediaController<'scope> {
+impl MediaController {
 
   pub fn new() -> Self {
     Self {
-      sources: Default::default(),
+      descriptors: Default::default(),
       sessions: Default::default(),
     }
   }
 
-  pub fn register_source(
+  pub fn register_descriptor(
     &mut self,
     path: &str,
-    source: Source,
+    descriptor: MediaDescriptor,
   ) {
-    let _ = self.sources.insert(path.to_string(), source);
+    let _ = self.descriptors.insert(path.to_string(), descriptor);
   }
 
-  pub fn query_source_sdp(
+  pub fn query_sdp(
     &self,
     path: &str,
   ) -> Option<String> {
@@ -93,14 +102,11 @@ impl<'scope> MediaController<'scope> {
   pub fn register_session(
     &mut self,
     path: &str,
-  ) -> Result<(String, &'scope Session<'scope>), RegisterSessionError> {
-    if let Some(source) = self.sources.get_mut(path) {
+  ) -> Result<(String, &Session), RegisterSessionError> {
+    if let Some(descriptor) = self.descriptors.get_mut(path) {
       let session_id = Session::generate_id();
       if let Entry::Vacant(entry) = self.sessions.entry(session_id) {
-        entry.insert(Session {
-          state: State::Init,
-          source,
-        })
+        entry.insert(Session { /* TODO */})
       } else {
         Err(RegisterSessionError::AlreadyExists)
       }
@@ -108,6 +114,16 @@ impl<'scope> MediaController<'scope> {
       Err(RegisterSessionError::NotFound)
     }
   }
+
+  pub fn session(
+    &self,
+    session_id: &str,
+  ) -> Option<&Session> {
+    // TODO
+    None
+  }
+
+  // TODO Below methods should be in media!
 
   // TODO Implement
   // pub fn play(
@@ -137,11 +153,11 @@ impl<'scope> MediaController<'scope> {
 
 }
 
-impl fmt::Display for MediaController<'_> {
+impl fmt::Display for MediaController {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    writeln!(f, "sources:")?;
-    for (path, source) in self.sources.iter() {
+    writeln!(f, "descriptors:")?;
+    for (path, source) in self.descriptors.iter() {
       writeln!(f, " - {}: {}", path, source)?;
     }
     writeln!(f, "sessions:")?;
@@ -156,4 +172,14 @@ impl fmt::Display for MediaController<'_> {
 pub enum RegisterSessionError {
   NotFound,
   AlreadyExists,
+}
+
+pub struct Service<T: Transmux> {
+  transmuxers: Vec<T>,
+}
+
+impl<T: Transmux> Service<T> {
+
+  // TODO implement service for all different transmuxers
+
 }

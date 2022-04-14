@@ -10,12 +10,6 @@ use config::{
 };
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum MediaKind {
-  Multiplex,
-}
-
-#[derive(Debug, Deserialize)]
 pub struct Settings {
   pub server: Server,
   pub media: Vec<MediaItem>,
@@ -32,6 +26,14 @@ pub struct MediaItem {
   pub kind: MediaKind,
   pub path: String,
   pub uri: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaKind {
+  Stream,
+  StreamMultiplex,
+  FileLoop,
 }
 
 impl Default for Settings {
