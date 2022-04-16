@@ -1,6 +1,5 @@
 mod server;
 mod media;
-mod transmux;
 mod settings;
 
 use std::error::Error;
@@ -10,7 +9,6 @@ use std::sync::Arc;
 
 use settings::{Settings, MediaKind};
 use media::{MediaController, MediaDescriptor};
-use multiplexer::Multiplexer;
 use server::Server;
 
 #[tokio::main]

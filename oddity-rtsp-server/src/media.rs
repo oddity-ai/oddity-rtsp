@@ -1,9 +1,13 @@
+mod stream;
+mod multiplex;
+
 use std::fmt;
+use std::rc::Rc;
 use std::collections::{HashMap, hash_map::Entry};
 
-use oddity_rtsp_protocol::Uri;
+use rand::Rng;
 
-use crate::transmux::{Transmux, FileLoop}; // TODO cleanup
+use oddity_rtsp_protocol::Uri;
 
 pub enum MediaDescriptor {
   Multiplexer {
@@ -25,6 +29,7 @@ impl fmt::Display for MediaDescriptor {
 
 pub struct Session {
   state: State,
+  manager: Rc<dyn MediaManager>,
 }
 
 impl Session {
@@ -43,7 +48,8 @@ impl Session {
 impl fmt::Display for Session {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{} ({})", self.state, /* TODO */)
+    // TODO write!(f, "{} ({})", self.state, /* TODO */)
+    Ok(())
   }
 
 }
@@ -68,18 +74,21 @@ impl fmt::Display for State {
 
 pub struct MediaController {
   descriptors: HashMap<String, MediaDescriptor>,
-  sessions: HashMap<String, &dyn Servicable>,
-  service_file_loops: Service<FileLoop>,
-  service_streams: Service<Stream>,
-  service_stream_multiplexers: Service<StreamMultiplex>,
+  // TODO can we not get rid of this whole Rc dance by mapping
+  // sessions to media descriptors, and resolving the descriptor
+  // to the correct manager...???
+  sessions: HashMap<String, Session>,
+  // TODO stream_manager: Rc<StreamManager>,
+  stream_multiplex_manager: Rc<MultiplexManager>, // TODO name?
 }
 
 impl MediaController {
 
   pub fn new() -> Self {
     Self {
-      descriptors: Default::default(),
-      sessions: Default::default(),
+      descriptors: HashMap::new(),
+      sessions: HashMap::new(),
+      stream_multiplex_manager: Rc::new(MultiplexManager {}),
     }
   }
 
@@ -106,7 +115,20 @@ impl MediaController {
     if let Some(descriptor) = self.descriptors.get_mut(path) {
       let session_id = Session::generate_id();
       if let Entry::Vacant(entry) = self.sessions.entry(session_id) {
-        entry.insert(Session { /* TODO */})
+        match descriptor {
+          MediaDescriptor::Multiplexer { url } => {
+            // TODO new and formatting???
+            Ok((
+              session_id,
+              entry.insert(Session {
+                state: State::Init,
+                manager: self.stream_multiplex_manager.clone()
+              })
+            ))
+          },
+        }
+        // TODO entry.insert(Session { /* TODO */})
+
       } else {
         Err(RegisterSessionError::AlreadyExists)
       }
@@ -174,12 +196,18 @@ pub enum RegisterSessionError {
   AlreadyExists,
 }
 
-pub struct Service<T: Transmux> {
-  transmuxers: Vec<T>,
+pub trait MediaManager {
+
+  fn play(&self, session: &Session);
+
 }
 
-impl<T: Transmux> Service<T> {
+pub struct MultiplexManager;
 
-  // TODO implement service for all different transmuxers
+impl MediaManager for MultiplexManager {
+
+  fn play(&self, session: &Session) {
+    unimplemented!()
+  }
 
 }
