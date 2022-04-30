@@ -1,5 +1,5 @@
-mod multiplexer;
 mod stream;
+mod multiplex;
 mod file;
 
 use std::sync::{Arc, Mutex};
@@ -11,7 +11,7 @@ use rand::Rng;
 
 use oddity_rtsp_protocol::Uri;
 
-use multiplexer::{Multiplexer, MultiplexerService};
+use multiplex::{Multiplexer, MultiplexerService};
 
 pub enum MediaDescriptor {
   Multiplexer {
