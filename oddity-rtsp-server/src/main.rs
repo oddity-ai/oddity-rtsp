@@ -1,6 +1,5 @@
 mod server;
 mod media;
-mod transmux;
 mod settings;
 
 use std::error::Error;
@@ -10,7 +9,7 @@ use std::sync::Arc;
 
 use settings::{Settings, MediaKind};
 use media::{MediaController, MediaDescriptor};
-use multiplexer::Multiplexer;
+//use multiplexer::Multiplexer;
 use server::Server;
 
 #[tokio::main]
@@ -29,6 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
   tracing::debug!(?settings, "read settings file");
 
   let mut media_controller = MediaController::new();
+  /*
   for media_item in settings.media.iter() {
     let source = match media_item.kind {
       MediaKind::Multiplex =>
@@ -37,8 +37,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         unimplemented!(), // TODO implement Stream and FileLoop
     };
 
-    media_controller.register_source(&media_item.path, source);
+    // media_controller.register_source(&media_item.path, source);
   }
+  */
 
   tracing::info!(%media_controller, "initialized media controller");
 

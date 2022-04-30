@@ -1,15 +1,28 @@
-use std::fmt;
+mod multiplexer;
+mod stream;
+mod file;
+
+use std::sync::{Arc, Mutex};
 use std::collections::{HashMap, hash_map::Entry};
+use std::path::PathBuf;
+use std::fmt;
+
+use rand::Rng;
 
 use oddity_rtsp_protocol::Uri;
 
-use crate::transmux::{Transmux, FileLoop}; // TODO cleanup
+use multiplexer::{Multiplexer, MultiplexerService};
 
 pub enum MediaDescriptor {
   Multiplexer {
     url: Uri,
   },
-  // TODO
+  Stream {
+    url: Uri,
+  },
+  FileLoop {
+    file: PathBuf,
+  },
 }
 
 impl fmt::Display for MediaDescriptor {
@@ -18,32 +31,42 @@ impl fmt::Display for MediaDescriptor {
     match self {
       MediaDescriptor::Multiplexer { url } =>
         write!(f, "multiplexer: {}", url),
+      MediaDescriptor::Stream { url } =>
+        write!(f, "stream: {}", url),
+      MediaDescriptor::FileLoop { file } =>
+        write!(f, "file loop: {}", file.display()),
     }
   }
 
 }
 
-pub struct Session {
-  state: State,
+pub trait MediaPlayer: Send {
+
 }
 
-impl Session {
+pub type MediaSession = Box<dyn MediaPlayer>;
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct SessionId(String);
+
+impl SessionId {
   const SESSION_ID_LEN: usize = 16;
 
-  pub fn generate_id() -> String {
-    rand::thread_rng()
-      .sample_iter(&rand::distributions::Alphanumeric)
-      .take(Self::SESSION_ID_LEN)
-      .map(char::from)
-      .collect()
+  pub fn generate() -> SessionId {
+    SessionId(
+      rand::thread_rng()
+        .sample_iter(&rand::distributions::Alphanumeric)
+        .take(Self::SESSION_ID_LEN)
+        .map(char::from)
+        .collect())
   }
 
 }
 
-impl fmt::Display for Session {
+impl fmt::Display for SessionId {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{} ({})", self.state, /* TODO */)
+    self.0.fmt(f)
   }
 
 }
@@ -67,17 +90,16 @@ impl fmt::Display for State {
 }
 
 pub struct MediaController {
+  multiplexer_service: Arc<MultiplexerService>,
   descriptors: HashMap<String, MediaDescriptor>,
-  sessions: HashMap<String, &dyn Servicable>,
-  service_file_loops: Service<FileLoop>,
-  service_streams: Service<Stream>,
-  service_stream_multiplexers: Service<StreamMultiplex>,
+  sessions: HashMap<SessionId, Mutex<MediaSession>>,
 }
 
 impl MediaController {
 
   pub fn new() -> Self {
     Self {
+      multiplexer_service: Arc::new(MultiplexerService::new()),
       descriptors: Default::default(),
       sessions: Default::default(),
     }
@@ -102,11 +124,19 @@ impl MediaController {
   pub fn register_session(
     &mut self,
     path: &str,
-  ) -> Result<(String, &Session), RegisterSessionError> {
+  ) -> Result<SessionId, RegisterSessionError> {
     if let Some(descriptor) = self.descriptors.get_mut(path) {
-      let session_id = Session::generate_id();
-      if let Entry::Vacant(entry) = self.sessions.entry(session_id) {
-        entry.insert(Session { /* TODO */})
+      let session_id = SessionId::generate();
+      if let Entry::Vacant(entry) = self.sessions.entry(session_id.clone()) {
+        let player = match descriptor {
+          MediaDescriptor::Multiplexer { url } => {
+            // TODO init correctly
+            Box::new(Multiplexer::new(&self.multiplexer_service))
+          }
+          _ => unimplemented!(), // TODO
+        };
+        entry.insert(Mutex::new(player));
+        Ok(session_id)
       } else {
         Err(RegisterSessionError::AlreadyExists)
       }
@@ -115,15 +145,8 @@ impl MediaController {
     }
   }
 
-  pub fn session(
-    &self,
-    session_id: &str,
-  ) -> Option<&Session> {
-    // TODO
-    None
-  }
-
   // TODO Below methods should be in media!
+  // Hide mutex locking unlocking in these subfunctions
 
   // TODO Implement
   // pub fn play(
@@ -161,9 +184,9 @@ impl fmt::Display for MediaController {
       writeln!(f, " - {}: {}", path, source)?;
     }
     writeln!(f, "sessions:")?;
-    for (id, session) in self.sessions.iter() {
-      writeln!(f, " - {}: {}", id, session)?;
-    }
+    //for (id, session) in self.sessions.iter() {
+    //  writeln!(f, " - {}: {}", id, session)?;
+    //}
     Ok(())
   }
 
@@ -172,14 +195,4 @@ impl fmt::Display for MediaController {
 pub enum RegisterSessionError {
   NotFound,
   AlreadyExists,
-}
-
-pub struct Service<T: Transmux> {
-  transmuxers: Vec<T>,
-}
-
-impl<T: Transmux> Service<T> {
-
-  // TODO implement service for all different transmuxers
-
 }
