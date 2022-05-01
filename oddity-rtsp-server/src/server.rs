@@ -19,7 +19,7 @@ use oddity_rtsp_protocol::{
   Method,
 };
 
-use super::media::MediaController;
+use super::media::Controller as MediaController;
 
 pub struct Server<A: ToSocketAddrs + 'static> {
   addrs: A,

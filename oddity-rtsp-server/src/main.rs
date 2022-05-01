@@ -1,6 +1,7 @@
 mod server;
 mod media;
 mod settings;
+mod worker;
 
 use std::error::Error;
 use std::env::args;
@@ -8,7 +9,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use settings::{Settings, MediaKind};
-use media::{MediaController, MediaDescriptor};
 use server::Server;
 
 #[tokio::main]
