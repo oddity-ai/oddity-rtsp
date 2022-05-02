@@ -10,8 +10,7 @@ use super::{
 };
 
 pub struct Controller {
-  sources: HashMap<Descriptor, Source>,
-  descriptors: HashMap<String, Descriptor>,
+  sources: HashMap<String, Source>,
   sessions: HashMap<SessionId, Mutex<Session>>,
 }
 
@@ -20,17 +19,17 @@ impl Controller {
   pub fn new() -> Self {
     Self {
       sources: HashMap::new(),
-      descriptors: HashMap::new(),
       sessions: HashMap::new(),
     }
   }
 
-  pub fn register_descriptor(
+  pub fn register_source(
     &mut self,
     path: &str,
-    descriptor: Descriptor,
+    descriptor: &Descriptor,
   ) {
-    let _ = self.descriptors.insert(path.to_string(), descriptor);
+    let source = Source::new(descriptor);
+    let _ = self.sources.insert(path.to_string(), source);
   }
 
   pub fn query_sdp(
@@ -45,10 +44,10 @@ impl Controller {
     &mut self,
     path: &str,
   ) -> Result<SessionId, RegisterSessionError> {
-    if let Some(descriptor) = self.descriptors.get_mut(path) {
+    if let Some(source) = self.sources.get_mut(path) {
       let session_id = SessionId::generate();
       if let Entry::Vacant(entry) = self.sessions.entry(session_id.clone()) {
-        let session = Session::new();
+        let session = Session::new(source);
         entry.insert(Mutex::new(session));
         Ok(session_id)
       } else {
@@ -85,15 +84,9 @@ impl Controller {
 impl fmt::Display for Controller {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    writeln!(f, "descriptors:")?;
-    for (path, source) in self.descriptors.iter() {
-      writeln!(f, " - {}: {}", path, source)?;
-    }
-    writeln!(f, "sessions:")?;
-    //for (id, session) in self.sessions.iter() {
-    //  writeln!(f, " - {}: {}", id, session)?;
-    //}
-    Ok(())
+    write!(f, "media controller with {} sources and {} active sessions",
+      self.sources.len(),
+      self.sessions.len())
   }
 
 }

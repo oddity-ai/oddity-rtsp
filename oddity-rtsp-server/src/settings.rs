@@ -31,9 +31,8 @@ pub struct MediaItem {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaKind {
+  File,
   Stream,
-  StreamMultiplex,
-  FileLoop,
 }
 
 impl Default for Settings {

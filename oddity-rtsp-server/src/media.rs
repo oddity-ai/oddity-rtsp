@@ -24,10 +24,10 @@ impl fmt::Display for Descriptor {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      Descriptor::Stream(url) =>
-        write!(f, "stream: {}", url),
       Descriptor::File(path) =>
         write!(f, "file: {}", path.display()),
+      Descriptor::Stream(url) =>
+        write!(f, "stream: {}", url),
     }
   }
 

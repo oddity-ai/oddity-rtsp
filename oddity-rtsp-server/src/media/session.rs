@@ -19,7 +19,7 @@ pub struct Session {
 
 impl Session {
 
-  pub fn new(source: &Source) -> Self {
+  pub fn new(source: &mut Source) -> Self {
     let worker = Worker::new({
       let subscriber = source.subscribe();
       move |stop| {

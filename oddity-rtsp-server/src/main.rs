@@ -8,8 +8,9 @@ use std::env::args;
 use std::path::Path;
 use std::sync::Arc;
 
-use settings::{Settings, MediaKind};
 use server::Server;
+use media::{Controller as MediaController, Descriptor};
+use settings::{Settings, MediaKind};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -27,18 +28,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
   tracing::debug!(?settings, "read settings file");
 
   let mut media_controller = MediaController::new();
-  /*
   for media_item in settings.media.iter() {
-    let source = match media_item.kind {
-      MediaKind::Multiplex =>
-        MediaDescriptor::Multiplex,
-      _ =>
-        unimplemented!(), // TODO implement Stream and FileLoop
+    let descriptor = match media_item.kind {
+      MediaKind::File
+        => Descriptor::File(media_item.path.as_str().into()),
+      MediaKind::Stream
+        => Descriptor::Stream(media_item.path.parse()?),
     };
 
-    // media_controller.register_source(&media_item.path, source);
+    media_controller.register_source(&media_item.path, &descriptor);
+    tracing::info!(%descriptor, "registered media item");
   }
-  */
 
   tracing::info!(%media_controller, "initialized media controller");
 

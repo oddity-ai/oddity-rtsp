@@ -29,7 +29,7 @@ impl Source {
     }
   }
 
-  pub fn subscribe(&self) -> Receiver<Packet> {
+  pub fn subscribe(&mut self) -> Receiver<Packet> {
     let receiver = match self.worker.as_ref() {
       Some((_, subscriber)) => {
         subscriber.clone()
@@ -55,7 +55,7 @@ impl Source {
     receiver
   }
 
-  pub fn unsubscribe(&self, _receiver: Receiver<Packet>) {
+  pub fn unsubscribe(&mut self, _receiver: Receiver<Packet>) {
     self.subscriber_count -= 1;
 
     // If there's no subscribers left, then we can stop the worker
