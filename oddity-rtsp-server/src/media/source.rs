@@ -4,11 +4,13 @@ use tokio::sync::watch::{
   Sender,
 };
 
+use oddity_video::{Locator, Reader, Write, Writer};
+
+use crate::worker::{Worker, Stopper}; // TODO own crate
+
 use super::{
   Descriptor,
 };
-
-use crate::worker::{Worker, Stopper}; // TODO own crate
 
 pub type Producer = Sender<Packet>;
 pub type Subscriber = Receiver<Packet>;
@@ -27,6 +29,15 @@ impl Source {
       worker: None,
       subscriber_count: 0,
     }
+  }
+
+  // TODO improve interface
+  pub fn describe(&self) -> String {
+    // TODO query sdp
+    let reader = Reader::new(&self.descriptor.clone().into()).unwrap(); // TODO unwrap
+    let writer = Writer::new_with_format("rtp://0.0.0.0", "rtp").unwrap();
+    
+    "".to_string()
   }
 
   pub fn subscribe(&mut self) -> Receiver<Packet> {

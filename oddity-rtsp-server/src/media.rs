@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::fmt;
 
 use oddity_rtsp_protocol::Uri;
+use oddity_video::Locator;
 
 pub use controller::Controller;
 pub use source::Source;
@@ -28,6 +29,19 @@ impl fmt::Display for Descriptor {
         write!(f, "file: {}", path.display()),
       Descriptor::Stream(url) =>
         write!(f, "stream: {}", url),
+    }
+  }
+
+}
+
+impl From<Descriptor> for Locator {
+
+  fn from(descriptor: Descriptor) -> Self {
+    match descriptor {
+      Descriptor::File(path)
+        => Locator::Path(path.into()),
+      Descriptor::Stream(uri)
+        => Locator::Url(uri.into()),
     }
   }
 
