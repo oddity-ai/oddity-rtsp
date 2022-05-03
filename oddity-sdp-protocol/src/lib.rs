@@ -1,6 +1,15 @@
+mod codec;
+mod timing;
+mod fmt;
+mod ip;
+
 use std::net::IpAddr;
 
-// TODO just for writing
+use codec::{CodecInfo, MediaAttributes};
+use timing::TimeRange;
+use fmt::FMT_RTP_PAYLOAD_DYNAMIC;
+use ip::ip_addr_type;
+
 pub struct Sdp {
   /* v= */
   pub version: Version,
@@ -38,8 +47,8 @@ impl Sdp {
     Self {
       version: Version::V0,
       origin_username: "-".to_string(),
-      origin_session_id: 0.to_string(), // TODO current time NTP
-      origin_session_version: 0.to_string(),
+      origin_session_id: 0_usize.to_string(), // TODO current time NTP
+      origin_session_version: 0_usize.to_string(),
       origin_network_type: NetworkType::Internet,
       origin_address_type: ip_addr_type(&origin),
       origin_unicast_address: origin.to_string(),
@@ -99,50 +108,16 @@ impl Sdp {
     kind: Kind,
     port: u16,
     protocol: Protocol,
-    codec: Codec,
+    codec_info: CodecInfo,
   ) -> Self {
     self.media.push(Media {
       kind,
       port,
       protocol,
-      format: 96, // TODO binding
-      tags: vec![
-        Tag::Value("rtmap".to_string(), "".to_string()), // TODO based on codec
-      ],
+      format: FMT_RTP_PAYLOAD_DYNAMIC,
+      tags: codec_info.media_attributes(),
     });
     self
-  }
-
-
-}
-
-fn ip_addr_type(addr: &IpAddr) -> AddressType {
-  match addr {
-    IpAddr::V4(_) => AddressType::IpV4,
-    IpAddr::V6(_) => AddressType::IpV6,
-  }
-}
-
-#[derive(Clone, Copy)]
-pub enum TimeRange {
-  Live,
-  Playback {
-    start: u64,
-    end: u64,
-  }
-}
-
-impl From<TimeRange> for (u64, u64) {
-
-  fn from(time_range: TimeRange) -> (u64, u64) {
-    match time_range {
-      TimeRange::Live
-        => (0, 0),
-      TimeRange::Playback {
-        start,
-        end,
-      } => (start, end),
-    }
   }
 
 }
@@ -188,8 +163,4 @@ pub enum Kind {
 pub enum Protocol {
   RtpAvp,
   RtpSAvp,
-}
-
-pub enum Codec {
-  H264,
 }
