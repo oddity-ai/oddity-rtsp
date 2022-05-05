@@ -9,8 +9,9 @@ use tokio::sync::oneshot::{
   Receiver,
 };
 
-// TODO refactor into crate
-
+/// Represents a worker object. The object manages a detached thread
+/// that is dedicated to a single tasks. The main purpose of this
+/// object is stop the worker thread when it is dropped.
 pub struct Worker {
   handle: Option<JoinHandle<()>>,
   stop_tx: Option<Sender<()>>,
@@ -18,6 +19,11 @@ pub struct Worker {
 
 impl Worker {
 
+  /// Create a new worker thread and start it.
+  /// 
+  /// # Arguments
+  /// 
+  /// * `f` - Closure to run inside thread.
   pub fn new<F>(f: F) -> Self
   where
     F: FnOnce(Stopper) -> (),
@@ -34,6 +40,15 @@ impl Worker {
     }
   }
 
+  /// Stop the worker manually.
+  /// 
+  /// Note that the recommended method for stopping the worker is by
+  /// dropping the `Worker` object.
+  /// 
+  /// # Arguments
+  /// 
+  /// * `wait` - If set to `true`, this function will block until the
+  ///   thread stopped itself.
   pub fn stop(mut self, wait: bool) {
     if let Some(handle) = self.handle.take() {
       if let Some(stop_tx) = self.stop_tx.take() {
@@ -54,6 +69,7 @@ impl Worker {
 
 impl Drop for Worker {
 
+  /// On dropping, send a stop signal to the worker and join.
   fn drop(&mut self) {
     if let Some(handle) = self.handle.take() {
       if let Some(stop_tx) = self.stop_tx.take() {
@@ -66,4 +82,6 @@ impl Drop for Worker {
 
 }
 
+/// Represents the receiver end of the channel that carries the signal
+/// to indicate that the worker should stop.
 pub type Stopper = Receiver<()>;

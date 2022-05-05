@@ -4,36 +4,56 @@ use tokio::sync::watch::{
   Sender,
 };
 
-use oddity_video::{
-  Reader,
-  RtpMuxer,
-  Locator,
-};
-use oddity_sdp_protocol::{
-  Sdp,
-  Kind,
-  Protocol,
-  TimeRange,
-  CodecInfo,
-};
-
-use crate::worker::{Worker, Stopper}; // TODO own crate
-
 use super::{
   Descriptor,
+  Error,
+  sdp::create as create_sdp,
+  super::{
+    worker::{
+      Worker,
+      Stopper,
+    },
+  },
 };
 
+/// Represents a media packet or no packet if none is available.
+pub type Packet = Option<oddity_video::Packet>;
+
+/// Sender end of a channel that produces media packets.
 pub type Producer = Sender<Packet>;
+
+/// Receiver end of a channel that produces media packets.
 pub type Subscriber = Receiver<Packet>;
 
+/// Media source that produces media packets when active. The source
+/// can produce packets and send them to one or more subscribers. This
+/// way, there is not need to instantiate multiple readers for the same
+/// media resource.
+/// 
+/// # Example
+/// 
+/// ```
+/// // TODO
+/// ```
 pub struct Source {
+  /// Describes the underlying media item.
   descriptor: Descriptor,
+  /// Contains a handle to the worker thread and a origin subscriber
+  /// from which new subscribers can be created. If the worker is not
+  /// active, it is `None`.
   worker: Option<(Worker, Subscriber)>,
+  /// Number of subscribers. When this becomes zero, we can stop the
+  /// worker to not waste any resources.
   subscriber_count: usize,
 }
 
 impl Source {
 
+  /// Create a new source.
+  /// 
+  /// # Arguments
+  /// 
+  /// * `descriptor` - Path or URI to underlying media source.
   pub fn new(descriptor: &Descriptor) -> Self {
     Self {
       descriptor: descriptor.clone(),
@@ -42,44 +62,36 @@ impl Source {
     }
   }
 
-  // TODO improve interface
-  pub fn describe(&self) -> String {
-    // TODO query sdp
-    let reader = Reader::new(&self.descriptor.clone().into()).unwrap(); // TODO unwrap
-    let rtp_muxer = RtpMuxer::new("rtp://0.0.0.0".parse().unwrap()).unwrap()
-      .with_stream(&reader, reader.best_video_stream_index().unwrap()).unwrap();
-    //let writer = Writer::new_with_format("rtp://0.0.0.0", "rtp").unwrap();
+  /// Fetch media description in the Session Description Protocol
+  /// format, as a string.
+  /// 
+  /// # Example
+  /// 
+  /// ```
+  /// // TODO
+  /// ```
+  pub fn describe(&self) -> Result<String, Error> {
+    let sdp = create_sdp(
+      "No Name".to_string(), // TODO
+      &self.descriptor,
+    )?;
 
-    println!("libavcodec: {}", rtp_muxer.sdp().unwrap());
-
-    let packetization_mode = rtp_muxer.packetization_mode();
-    let parameter_sets = rtp_muxer.parameter_sets();
-
-    let (sps, pps) = parameter_sets[0].as_ref().unwrap();
-
-    let sdp = Sdp::new([0, 0, 0, 0].into(), "-".to_string(), [0, 0, 0, 0].into(), TimeRange::Live)
-      .with_media(
-        Kind::Video,
-        1234,
-        Protocol::RtpAvp,
-        CodecInfo::h264(
-          sps,
-          pps.as_slice(),
-          packetization_mode,
-        ));
-
-    println!("ours: {}", sdp); // TODO TEST
-    
-    "".to_string()
+    Ok(format!("{}", sdp))
   }
 
+  /// Retrieve a `Subscriber` through which the receiver can fetch media
+  /// packets (produced by the worker).
   pub fn subscribe(&mut self) -> Receiver<Packet> {
     let receiver = match self.worker.as_ref() {
+      // If the worker is already active for this source and producing
+      // packets just return another receiver end for the source producer.
       Some((_, subscriber)) => {
         subscriber.clone()
       },
+      // If the worker is inactive (because there are no subscribers until
+      // now), start the work internally and acquire a subscriber to it.
       None => {
-        let (producer, subscriber) = channel(Default::default());
+        let (producer, subscriber) = channel(None);
         let worker = Worker::new({
           let descriptor = self.descriptor.clone();
           move |stop| {
@@ -99,6 +111,7 @@ impl Source {
     receiver
   }
 
+  /// Unsubscribe from the source.
   pub fn unsubscribe(&mut self, _receiver: Receiver<Packet>) {
     self.subscriber_count -= 1;
 
@@ -112,6 +125,7 @@ impl Source {
     }
   }
 
+  /// Internal worker function that performs the actual reading process.
   fn run(
     descriptor: Descriptor,
     producer: Producer,
@@ -126,5 +140,3 @@ impl Source {
   }
 
 }
-
-pub type Packet = Vec<u8>; // TODO
