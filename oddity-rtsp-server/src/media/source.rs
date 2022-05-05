@@ -4,6 +4,11 @@ use tokio::sync::watch::{
   Sender,
 };
 
+use oddity_video::{
+  Reader,
+  RtpMuxer,
+};
+
 use super::{
   Descriptor,
   Error,
@@ -131,12 +136,26 @@ impl Source {
     producer: Producer,
     stop: Stopper,
   ) {
-    // TODO
-    // - muxer = Muxer::new(descriptor)
-    // - while NOT stop_rx
-    //   - packet = muxer.mux()
-    //   - producer.send(packet)
-    // and some error handling here and there
+    // TODO ...
+    while !stop.should() {
+      let reader = match Reader::new(&descriptor.into()) {
+        Ok(reader) => reader,
+        Err(err) => {
+          // TODO logging
+          // TODO retry
+          continue;
+        },
+      };
+
+      // TODO mechanism for sending stream init information
+
+      let stream_id = reader.best_video_stream_index();
+
+      while !stop.should() {
+        let packet = reader.read(stream_id).unwrap() /* TODO */;
+        // TODO producer.send(packet);
+      }
+    }
   }
 
 }
