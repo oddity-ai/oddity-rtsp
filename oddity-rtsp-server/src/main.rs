@@ -31,9 +31,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
   for media_item in settings.media.iter() {
     let descriptor = match media_item.kind {
       MediaKind::File
-        => Descriptor::File(media_item.path.as_str().into()),
+        => Descriptor::File(media_item.source.as_str().into()),
       MediaKind::Stream
-        => Descriptor::Stream(media_item.path.parse()?),
+        => Descriptor::Stream(media_item.source.parse()?),
     };
 
     media_controller.register_source(&media_item.path, &descriptor);

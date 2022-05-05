@@ -23,9 +23,9 @@ pub struct Server {
 
 #[derive(Debug, Deserialize)]
 pub struct MediaItem {
-  pub kind: MediaKind,
   pub path: String,
-  pub uri: String,
+  pub kind: MediaKind,
+  pub source: String,
 }
 
 #[derive(Debug, Deserialize)]

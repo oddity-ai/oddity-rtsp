@@ -36,8 +36,11 @@ impl Controller {
     &self,
     path: &str,
   ) -> Option<String> {
-    // TODO
-    None
+    // TODO (handle paths)
+    self
+      .sources
+      .get(path)
+      .map(|source| source.describe())
   }
 
   pub fn register_session(

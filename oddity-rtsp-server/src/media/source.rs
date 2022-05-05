@@ -4,7 +4,18 @@ use tokio::sync::watch::{
   Sender,
 };
 
-use oddity_video::{Locator, Reader, Write, Writer};
+use oddity_video::{
+  Reader,
+  RtpMuxer,
+  Locator,
+};
+use oddity_sdp_protocol::{
+  Sdp,
+  Kind,
+  Protocol,
+  TimeRange,
+  CodecInfo,
+};
 
 use crate::worker::{Worker, Stopper}; // TODO own crate
 
@@ -35,7 +46,29 @@ impl Source {
   pub fn describe(&self) -> String {
     // TODO query sdp
     let reader = Reader::new(&self.descriptor.clone().into()).unwrap(); // TODO unwrap
-    let writer = Writer::new_with_format("rtp://0.0.0.0", "rtp").unwrap();
+    let rtp_muxer = RtpMuxer::new("rtp://0.0.0.0".parse().unwrap()).unwrap()
+      .with_stream(&reader, reader.best_video_stream_index().unwrap()).unwrap();
+    //let writer = Writer::new_with_format("rtp://0.0.0.0", "rtp").unwrap();
+
+    println!("libavcodec: {}", rtp_muxer.sdp().unwrap());
+
+    let packetization_mode = rtp_muxer.packetization_mode();
+    let parameter_sets = rtp_muxer.parameter_sets();
+
+    let (sps, pps) = parameter_sets[0].as_ref().unwrap();
+
+    let sdp = Sdp::new([0, 0, 0, 0].into(), "-".to_string(), [0, 0, 0, 0].into(), TimeRange::Live)
+      .with_media(
+        Kind::Video,
+        1234,
+        Protocol::RtpAvp,
+        CodecInfo::h264(
+          sps,
+          pps.as_slice(),
+          packetization_mode,
+        ));
+
+    println!("ours: {}", sdp); // TODO TEST
     
     "".to_string()
   }

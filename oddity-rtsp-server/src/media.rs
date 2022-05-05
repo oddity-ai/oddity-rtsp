@@ -5,8 +5,7 @@ mod controller;
 use std::path::PathBuf;
 use std::fmt;
 
-use oddity_rtsp_protocol::Uri;
-use oddity_video::Locator;
+use oddity_video::{Locator, Url};
 
 pub use controller::Controller;
 pub use source::Source;
@@ -17,7 +16,7 @@ pub use session::{
 
 #[derive(Clone)]
 pub enum Descriptor {
-  Stream(Uri),
+  Stream(Url),
   File(PathBuf),
 }
 
@@ -40,8 +39,8 @@ impl From<Descriptor> for Locator {
     match descriptor {
       Descriptor::File(path)
         => Locator::Path(path.into()),
-      Descriptor::Stream(uri)
-        => Locator::Url(uri.into()),
+      Descriptor::Stream(url)
+        => Locator::Url(url),
     }
   }
 

@@ -13,4 +13,5 @@ serde = { version = "1.0", features = ["derive"] }
 config = { version = "0.13", default-features = false, features = ["yaml"] }
 rand = "0.8"
 oddity-rtsp-protocol = { path = "../oddity-rtsp-protocol" }
+oddity-sdp-protocol = { path = "../oddity-sdp-protocol" }
 oddity-video = { path = "../../oddity-engine-next/oddity-video" } # Fix this weird dep path

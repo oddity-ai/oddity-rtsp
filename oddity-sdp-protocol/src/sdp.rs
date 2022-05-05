@@ -1,0 +1,306 @@
+use std::fmt;
+use std::net::IpAddr;
+
+use super::{
+  codec::{
+    CodecInfo,
+    MediaAttributes,
+  },
+  timing::TimeRange,
+  fmt::FMT_RTP_PAYLOAD_DYNAMIC,
+  ip::ip_addr_type,
+};
+
+pub struct Sdp {
+  /* v= */
+  pub version: Version,
+  /* o= */
+  pub origin_username: String,
+  pub origin_session_id: String,
+  pub origin_session_version: String,
+  pub origin_network_type: NetworkType,
+  pub origin_address_type: AddressType,
+  pub origin_unicast_address: String,
+  /* s= */
+  pub session_name: String,
+  /* i= */
+  pub session_description: Option<String>,
+  /* c= */
+  pub connection_network_type: NetworkType,
+  pub connection_address_type: AddressType,
+  pub connection_address: String,
+  /* t= */
+  pub timing: (u64, u64),
+  /* a= */
+  pub tags: Vec<Tag>,
+  /* ... */
+  pub media: Vec<Media>,
+}
+
+impl Sdp {
+
+  pub fn new(
+    origin: IpAddr,
+    name: String,
+    destination: IpAddr,
+    time_range: TimeRange,
+  ) -> Self {
+    Self {
+      version: Version::V0,
+      origin_username: "-".to_string(),
+      origin_session_id: 0_usize.to_string(), // TODO current time NTP
+      origin_session_version: 0_usize.to_string(),
+      origin_network_type: NetworkType::Internet,
+      origin_address_type: ip_addr_type(&origin),
+      origin_unicast_address: origin.to_string(),
+      session_name: name,
+      session_description: None,
+      connection_network_type: NetworkType::Internet,
+      connection_address_type: ip_addr_type(&destination),
+      connection_address: destination.to_string(),
+      tags: Vec::new(),
+      timing: time_range.into(),
+      media: Vec::new(),
+    }
+  }
+
+  pub fn with_username(
+    mut self,
+    username: &str,
+  ) -> Self {
+    self.origin_username = username.to_string();
+    self
+  }
+
+  pub fn with_session_version(
+    mut self,
+    version: usize,
+  ) -> Self {
+    self.origin_session_version = version.to_string();
+    self
+  }
+
+  pub fn with_description(
+    mut self,
+    description: &str,
+  ) -> Self {
+    self.session_description = Some(description.to_string());
+    self
+  }
+
+  pub fn with_tag(
+    mut self,
+    tag: Tag,
+  ) -> Self {
+    self.tags.push(tag);
+    self
+  }
+
+  pub fn with_tags(
+    mut self,
+    tags: impl IntoIterator<Item=Tag>,
+  ) -> Self {
+    self.tags.extend(tags);
+    self
+  }
+
+  pub fn with_media(
+    mut self,
+    kind: Kind,
+    port: u16,
+    protocol: Protocol,
+    codec_info: CodecInfo,
+  ) -> Self {
+    self.media.push(Media {
+      kind,
+      port,
+      protocol,
+      format: FMT_RTP_PAYLOAD_DYNAMIC,
+      tags: codec_info.media_attributes(),
+    });
+    self
+  }
+
+}
+
+impl fmt::Display for Sdp {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    writeln!(f, "v={}", self.version)?;
+    writeln!(f,
+      "o={} {} {} {} {} {}",
+      self.origin_username,
+      self.origin_session_id,
+      self.origin_session_version,
+      self.origin_network_type,
+      self.origin_address_type,
+      self.origin_unicast_address)?;
+
+    writeln!(f, "s={}", self.session_name)?;
+    if let Some(session_description) = self.session_description.as_ref() {
+      writeln!(f, "i={}", session_description)?;
+    }
+
+    writeln!(f,
+      "c={} {} {}",
+      self.connection_network_type,
+      self.connection_address_type,
+      self.connection_address)?;
+
+    writeln!(f,
+      "t={} {}",
+      self.timing.0,
+      self.timing.1)?;
+
+    for tag in &self.tags {
+      writeln!(f, "a={}", tag)?;
+    }
+
+    for media in &self.media {
+      write!(f, "{}", media)?;
+    }
+
+    Ok(())
+  }
+
+}
+pub struct Media {
+  /* m= */
+  pub kind: Kind,
+  pub port: u16,
+  pub protocol: Protocol,
+  pub format: usize,
+  /* a= */
+  pub tags: Vec<Tag>,
+}
+
+impl fmt::Display for Media {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    writeln!(f,
+      "m={} {} {} {}",
+      self.kind,
+      self.port,
+      self.protocol,
+      self.format,
+    )?;
+
+    for tag in &self.tags {
+      writeln!(f, "a={}", tag)?;
+    }
+
+    Ok(())
+  }
+
+}
+
+pub struct Timing {
+  pub start: u64,
+  pub stop: u64,
+}
+
+impl fmt::Display for Timing {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{} {}", self.start, self.stop)
+  }
+
+}
+
+pub enum Version {
+  V0,
+}
+
+impl fmt::Display for Version {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Version::V0 => write!(f, "0"),
+    }
+  }
+
+}
+
+pub enum NetworkType {
+  Internet,
+}
+
+impl fmt::Display for NetworkType {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      NetworkType::Internet => write!(f, "IN"),
+    }
+  }
+
+}
+
+pub enum AddressType {
+  IpV4,
+  IpV6,
+}
+
+impl fmt::Display for AddressType {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      AddressType::IpV4 => write!(f, "IP4"),
+      AddressType::IpV6 => write!(f, "IP6"),
+    }
+  }
+
+}
+
+pub enum Tag {
+  Property(String),
+  Value(String, String),
+}
+
+impl fmt::Display for Tag {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Tag::Property(value)        => write!(f, "{value}"),
+      Tag::Value(variable, value) => write!(f, "{variable}:{value}"),
+    }
+  }
+
+}
+
+pub enum Kind {
+  Video,
+  Audio,
+  Text,
+  Application,
+  Message,
+}
+
+impl fmt::Display for Kind {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Kind::Video       => write!(f, "video"),
+      Kind::Audio       => write!(f, "audio"),
+      Kind::Text        => write!(f, "text"),
+      Kind::Application => write!(f, "application"),
+      Kind::Message     => write!(f, "message"),
+    }
+  }
+
+}
+
+pub enum Protocol {
+  RtpAvp,
+  RtpSAvp,
+}
+
+impl fmt::Display for Protocol {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Protocol::RtpAvp  => write!(f, "RTP/AVP"),
+      Protocol::RtpSAvp => write!(f, "RTP/SAVP"),
+    }
+  }
+
+}
