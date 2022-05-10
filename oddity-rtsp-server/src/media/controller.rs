@@ -28,6 +28,10 @@ impl Controller {
     path: &str,
     descriptor: &Descriptor,
   ) {
+    let path = path
+      .strip_prefix("/")
+      .unwrap_or(path);
+
     let source = Source::new(descriptor);
     let _ = self.sources.insert(path.to_string(), source);
   }

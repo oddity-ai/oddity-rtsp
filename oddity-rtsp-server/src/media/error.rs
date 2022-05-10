@@ -1,12 +1,12 @@
 use std::error;
 use std::fmt;
 
-use oddity_video::Error as MediaError;
+pub use oddity_video::Error as VideoError;
 
 #[derive(Debug, Clone)]
 pub enum Error {
   CodecNotSupported,
-  Media(MediaError),
+  Media(VideoError),
 }
 
 impl fmt::Display for Error {

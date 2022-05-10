@@ -1,13 +1,16 @@
+// TODO(gerwin) Refactor into `oddity-threading` crate.
+
 use std::thread::{
   spawn,
   JoinHandle,
 };
 
-use tokio::sync::oneshot::{
-  channel,
+use crossbeam_channel::{
+  bounded,
   Sender,
   Receiver,
-  error::TryRecvError,
+  RecvError,
+  TryRecvError,
 };
 
 /// Represents a worker object. The object manages a detached thread
@@ -30,7 +33,7 @@ impl Worker {
     F: FnOnce(Stopper) -> (),
     F: Send + 'static,
   {
-    let (stop_tx, stop_rx) = channel();
+    let (stop_tx, stop_rx) = bounded(1);
     let handle = spawn(move || {
       f(stop_rx.into())
     });
@@ -85,30 +88,52 @@ impl Drop for Worker {
 
 /// Represents the receiver end of the channel that carries the signal
 /// to indicate that the worker should stop.
-pub struct Stopper(Receiver<()>);
+pub struct Stopper {
+  rx: Receiver<()>,
+  flag: bool,
+}
 
 impl Stopper {
 
-  /// TODO
-  /// TODO FIXME calling second time after successful receive ()
-  /// should not cause error logging but just return `true`
-  pub fn should(&self) -> bool {
-    match self.0.try_recv() {
-      Ok(())
-        => true,
-      Err(TryRecvError::Empty)
-        => false,
-      Err(TryRecvError::Closed) => {
-        // TODO logging
-
-        true
+  /// Check whether or not to stop without blocking. If any previous
+  /// call to `should` returned `true`, then any subsequent invocations
+  /// will return `true` as well. The same goes for having previously
+  /// called `wait`.
+  /// 
+  /// Note: If the underlying channel fails, this function will signal
+  /// the caller to stop.
+  pub fn should(&mut self) -> bool {
+    if self.flag {
+      true
+    } else {
+      match self.rx.try_recv() {
+        Ok(()) => {
+          self.flag = true;
+          true
+        },
+        Err(TryRecvError::Disconnected) => {
+          tracing::error!("stopper channel broke unexpectedly");
+          self.flag = true;
+          true
+        },
+        Err(TryRecvError::Empty) => false,
       }
     }
   }
 
-  /// TODO
-  pub fn wait(&self) {
-    // TODO impl
+  /// Wait until a stop signal is received.
+  /// 
+  /// Note: If the underlying channel fails, this function will return.
+  pub fn wait(&mut self) {
+    match self.rx.recv() {
+      Ok(()) => {
+        self.flag = true;
+      },
+      Err(RecvError) => {
+        tracing::error!("stopper channel broke unexpectedly");
+        self.flag = true;
+      },
+    }
   }
 
 }
@@ -117,7 +142,10 @@ impl From<Receiver<()>> for Stopper {
 
   /// Allows for easy conversion from `Receiver<()>` to `Stopper`.
   fn from(receiver: Receiver<()>) -> Self {
-    Stopper(receiver)
+    Stopper {
+      rx: receiver,
+      flag: false,
+    }
   }
 
 }

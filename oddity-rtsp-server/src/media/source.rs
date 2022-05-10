@@ -1,17 +1,15 @@
-use tokio::sync::watch::{
-  channel,
-  Receiver,
-  Sender,
-};
+mod comm;
+mod msg;
+
+use std::sync::Arc;
 
 use oddity_video::{
   Reader,
-  RtpMuxer,
+  StreamInfo,
 };
 
 use super::{
   Descriptor,
-  Error,
   sdp::create as create_sdp,
   super::{
     worker::{
@@ -19,16 +17,14 @@ use super::{
       Stopper,
     },
   },
+  Error,
+  VideoError,
 };
 
-/// Represents a media packet or no packet if none is available.
-pub type Packet = Option<oddity_video::Packet>;
+use comm::Communication;
 
-/// Sender end of a channel that produces media packets.
-pub type Producer = Sender<Packet>;
-
-/// Receiver end of a channel that produces media packets.
-pub type Subscriber = Receiver<Packet>;
+pub use comm::Rx;
+pub use msg::Message;
 
 /// Media source that produces media packets when active. The source
 /// can produce packets and send them to one or more subscribers. This
@@ -46,10 +42,10 @@ pub struct Source {
   /// Contains a handle to the worker thread and a origin subscriber
   /// from which new subscribers can be created. If the worker is not
   /// active, it is `None`.
-  worker: Option<(Worker, Subscriber)>,
-  /// Number of subscribers. When this becomes zero, we can stop the
-  /// worker to not waste any resources.
-  subscriber_count: usize,
+  worker: Option<Worker>,
+  /// Contains underlying communications handling for worker and the
+  /// subscribers to this source.
+  comms: Communication,
 }
 
 impl Source {
@@ -63,7 +59,7 @@ impl Source {
     Self {
       descriptor: descriptor.clone(),
       worker: None,
-      subscriber_count: 0,
+      comms: Communication::new(),
     }
   }
 
@@ -84,47 +80,48 @@ impl Source {
     Ok(format!("{}", sdp))
   }
 
-  /// Retrieve a `Subscriber` through which the receiver can fetch media
-  /// packets (produced by the worker).
-  pub fn subscribe(&mut self) -> Receiver<Packet> {
+  /// Retrieve a `Rx` through which the receiver can fetch media control
+  /// packets such as re-initialization or media objects.
+  pub fn subscribe(&mut self) -> Rx {
     let receiver = match self.worker.as_ref() {
       // If the worker is already active for this source and producing
       // packets just return another receiver end for the source producer.
-      Some((_, subscriber)) => {
-        subscriber.clone()
+      Some(_) => {
+        self.comms.subscribe()
       },
       // If the worker is inactive (because there are no subscribers until
       // now), start the work internally and acquire a subscriber to it.
       None => {
-        let (producer, subscriber) = channel(None);
+        let rx = self.comms.subscribe();
         let worker = Worker::new({
           let descriptor = self.descriptor.clone();
+          let comms = self.comms.clone();
           move |stop| {
             Self::run(
               descriptor,
-              producer,
-              stop)
-          }});
+              comms,
+              stop,
+            )
+          }
+        });
 
-        self.worker = Some((worker, subscriber.clone()));
-        subscriber
+        self.worker = Some(worker);
+        rx
       }
     };
-
-    self.subscriber_count += 1;
 
     receiver
   }
 
   /// Unsubscribe from the source.
-  pub fn unsubscribe(&mut self, _receiver: Receiver<Packet>) {
-    self.subscriber_count -= 1;
+  pub fn unsubscribe(&mut self, rx: Rx) {
+    self.comms.unsubscribe(rx);
 
-    // If there's no subscribers left, then we can stop the worker
+    // If there's no receivers left, then we can stop the worker
     // thread since it is not necessary anymore. It will be restarted
     // the next time there's a subscription.
-    if self.subscriber_count <= 0 {
-      if let Some((worker, _)) = self.worker.take() {
+    if self.comms.num_subscribers() <= 0 {
+      if let Some(worker) = self.worker.take() {
         worker.stop(false);
       }
     }
@@ -133,29 +130,70 @@ impl Source {
   /// Internal worker function that performs the actual reading process.
   fn run(
     descriptor: Descriptor,
-    producer: Producer,
-    stop: Stopper,
+    mut comms: Communication,
+    mut stop: Stopper,
   ) {
-    // TODO ...
+    fn retry_timeout() {
+      // TODO
+    }
+
+    'outer:
     while !stop.should() {
-      let reader = match Reader::new(&descriptor.into()) {
-        Ok(reader) => reader,
+      let (mut reader, stream_id) = match Reader::new(&descriptor.clone().into()) {
+        Ok(reader) => {
+          match fetch_stream_info(&reader) {
+            Ok((stream_id, stream_info)) => {
+              comms.broadcast(Message::Init(stream_info));
+              (reader, stream_id)
+            },
+            Err(err) => {
+              tracing::error!(
+                %descriptor, %err,
+                "failed to fetch stream information"
+              );
+              retry_timeout();
+              continue 'outer;
+            },
+          }
+        },
         Err(err) => {
-          // TODO logging
-          // TODO retry
-          continue;
+          tracing::error!(
+            %descriptor, %err,
+            "failed to open media"
+          );
+          retry_timeout();
+          continue 'outer;
         },
       };
 
-      // TODO mechanism for sending stream init information
-
-      let stream_id = reader.best_video_stream_index();
-
       while !stop.should() {
-        let packet = reader.read(stream_id).unwrap() /* TODO */;
-        // TODO producer.send(packet);
+        match reader.read(stream_id) {
+          Ok(packet) => {
+            comms.broadcast(Message::Packet(packet));
+          },
+          Err(err) => {
+            tracing::error!(
+              %descriptor, %err,
+              "reading from video stream failed",
+            );
+            retry_timeout();
+            continue 'outer;
+          },
+        };
       }
     }
   }
 
+}
+
+/// Helper function for acquiring stream information.
+fn fetch_stream_info(
+  reader: &Reader,
+) -> Result<(usize, StreamInfo), VideoError> {
+  let stream_index = reader.best_video_stream_index()?;
+
+  Ok((
+    stream_index,
+    reader.stream_info(stream_index)?,
+  ))
 }

@@ -6,10 +6,16 @@ mod sdp;
 mod error;
 
 pub use controller::Controller;
-pub use source::Source;
+pub use source::{
+  Source,
+  Rx as SourceRx,
+};
 pub use session::{
   SessionId,
   Session,
 };
 pub use descriptor::Descriptor;
-pub use error::Error;
+pub use error::{
+  Error,
+  VideoError,
+};

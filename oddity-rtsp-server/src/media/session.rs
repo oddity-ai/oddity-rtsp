@@ -4,33 +4,32 @@ use rand::Rng;
 
 use super::{
   Source,
-  // TODO
-  source::Packet,
-  source::Subscriber,
+  SourceRx,
 };
 
 use crate::worker::{Worker, Stopper};
 
 pub struct Session {
   worker: Option<Worker>,
-  subscriber: Subscriber,
-  // TODO control channel
+  source_rx: SourceRx,
 }
 
 impl Session {
 
   pub fn new(source: &mut Source) -> Self {
     let worker = Worker::new({
-      let subscriber = source.subscribe();
+      let source_rx = source.subscribe();
       move |stop| {
         Self::run(
-          subscriber,
-          stop)
-      }});
+          source_rx,
+          stop,
+        )
+      }
+    });
 
     Self {
       worker: Some(worker),
-      subscriber: source.subscribe(),
+      source_rx: source.subscribe(),
     }
   }
 
@@ -45,7 +44,7 @@ impl Session {
 
   fn run(
     // TODO target
-    subscriber: Subscriber,
+    source_rx: SourceRx,
     stop: Stopper,
   ) {
     
