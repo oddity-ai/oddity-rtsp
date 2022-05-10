@@ -7,6 +7,7 @@ use tokio::sync::oneshot::{
   channel,
   Sender,
   Receiver,
+  error::TryRecvError,
 };
 
 /// Represents a worker object. The object manages a detached thread
@@ -31,7 +32,7 @@ impl Worker {
   {
     let (stop_tx, stop_rx) = channel();
     let handle = spawn(move || {
-      f(stop_rx)
+      f(stop_rx.into())
     });
 
     Self {
@@ -84,4 +85,39 @@ impl Drop for Worker {
 
 /// Represents the receiver end of the channel that carries the signal
 /// to indicate that the worker should stop.
-pub type Stopper = Receiver<()>;
+pub struct Stopper(Receiver<()>);
+
+impl Stopper {
+
+  /// TODO
+  /// TODO FIXME calling second time after successful receive ()
+  /// should not cause error logging but just return `true`
+  pub fn should(&self) -> bool {
+    match self.0.try_recv() {
+      Ok(())
+        => true,
+      Err(TryRecvError::Empty)
+        => false,
+      Err(TryRecvError::Closed) => {
+        // TODO logging
+
+        true
+      }
+    }
+  }
+
+  /// TODO
+  pub fn wait(&self) {
+    // TODO impl
+  }
+
+}
+
+impl From<Receiver<()>> for Stopper {
+
+  /// Allows for easy conversion from `Receiver<()>` to `Stopper`.
+  fn from(receiver: Receiver<()>) -> Self {
+    Stopper(receiver)
+  }
+
+}
