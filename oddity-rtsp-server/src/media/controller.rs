@@ -28,21 +28,20 @@ impl Controller {
     path: &str,
     descriptor: &Descriptor,
   ) {
-    let path = path
-      .strip_prefix("/")
-      .unwrap_or(path);
-
-    let source = Source::new(descriptor);
-    let _ = self.sources.insert(path.to_string(), source);
+    let _ = self.sources.insert(
+      normalize_url_path(path).to_string(),
+      Source::new(descriptor),
+    );
   }
 
   pub fn query_sdp(
     &self,
     path: &str,
   ) -> Option<String> {
+    // TODO we can do better
     self
       .sources
-      .get(path)
+      .get(normalize_url_path(path))
       .and_then(|source| {
         match source.describe() {
           Ok(source) => Some(source),
@@ -61,7 +60,7 @@ impl Controller {
     &mut self,
     path: &str,
   ) -> Result<SessionId, RegisterSessionError> {
-    if let Some(source) = self.sources.get_mut(path) {
+    if let Some(source) = self.sources.get_mut(normalize_url_path(path)) {
       let session_id = SessionId::generate();
       if let Entry::Vacant(entry) = self.sessions.entry(session_id.clone()) {
         let session = Session::new(source);
@@ -111,4 +110,10 @@ impl fmt::Display for Controller {
 pub enum RegisterSessionError {
   NotFound,
   AlreadyExists,
+}
+
+fn normalize_url_path(path: &str) -> &str {
+  path
+    .strip_prefix("/")
+    .unwrap_or(path)
 }
