@@ -16,7 +16,17 @@ use super::{
   Error,
 };
 
-/// TODO
+/// Create a new SDP description for the given media descriptor. The
+/// SDP contents can be used over RTSP when the client requested a
+/// stream description.
+/// 
+/// Note: This function only handles the most appropriate video stream
+/// and tosses any audio or other streams.
+/// 
+/// # Arguments
+/// 
+/// * `name` - Name of stream.
+/// * `descriptor` - Media stream descriptor.
 pub fn create(
   name: String,
   descriptor: &Descriptor,
@@ -39,7 +49,8 @@ pub fn create(
   };
 
   let muxer = RtpMuxer::new(TARGET_DUMMY_URL.parse().unwrap())
-    .and_then(|muxer| muxer.with_stream(&reader, best_video_stream))
+    .and_then(|muxer|
+      muxer.with_stream(reader.stream_info(best_video_stream)?))
     .map_err(Error::Media)?;
 
   let (sps, pps) = muxer

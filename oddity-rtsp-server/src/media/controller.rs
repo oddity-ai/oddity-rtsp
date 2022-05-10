@@ -36,11 +36,21 @@ impl Controller {
     &self,
     path: &str,
   ) -> Option<String> {
-    // TODO (handle paths)
     self
       .sources
       .get(path)
-      .map(|source| source.describe())
+      .and_then(|source| {
+        match source.describe() {
+          Ok(source) => Some(source),
+          Err(err) => {
+            tracing::error!(
+              path, %err,
+              "failed to query SDP for stream"
+            );
+            None
+          }
+        }
+      })
   }
 
   pub fn register_session(

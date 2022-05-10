@@ -3,6 +3,7 @@ mod timing;
 mod codec;
 mod fmt;
 mod ip;
+mod time;
 
 pub use sdp::{
   Sdp,

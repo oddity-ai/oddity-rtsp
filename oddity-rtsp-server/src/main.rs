@@ -16,7 +16,6 @@ use settings::{Settings, MediaKind};
 async fn main() -> Result<(), Box<dyn Error>> {
   tracing_subscriber::fmt()
     .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG"))
-    .pretty()
     .init();
 
   let settings_file = args()

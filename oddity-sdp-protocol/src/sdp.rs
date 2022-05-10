@@ -9,6 +9,7 @@ use super::{
   timing::TimeRange,
   fmt::FMT_RTP_PAYLOAD_DYNAMIC,
   ip::ip_addr_type,
+  time::unix_epoch_timestamp,
 };
 
 pub struct Sdp {
@@ -48,8 +49,8 @@ impl Sdp {
     Self {
       version: Version::V0,
       origin_username: "-".to_string(),
-      origin_session_id: 0_usize.to_string(), // TODO current time NTP
-      origin_session_version: 0_usize.to_string(),
+      origin_session_id: unix_epoch_timestamp().to_string(),
+      origin_session_version: 0_u64.to_string(),
       origin_network_type: NetworkType::Internet,
       origin_address_type: ip_addr_type(&origin),
       origin_unicast_address: origin.to_string(),
