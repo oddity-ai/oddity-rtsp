@@ -5,7 +5,10 @@ mod descriptor;
 mod sdp;
 mod error;
 
-pub use controller::Controller;
+pub use controller::{
+  Controller,
+  RegisterSessionError,
+};
 pub use source::{
   Source,
   Rx as SourceRx,

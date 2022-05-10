@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use futures::{StreamExt, SinkExt};
 
@@ -19,56 +19,44 @@ use oddity_rtsp_protocol::{
   Method,
 };
 
-use super::media::Controller as MediaController;
+use super::media;
+
+type MediaController = Arc<Mutex<media::Controller>>;
 
 pub struct Server<A: ToSocketAddrs + 'static> {
   addrs: A,
-  media: Arc<MediaController>,
+  media: MediaController,
 }
 
 impl<A: ToSocketAddrs + 'static> Server<A> {
 
   pub fn new(
     addrs: A,
-    media: &Arc<MediaController>,
+    media: media::Controller,
   ) -> Self {
     Self {
       addrs,
-      media: Arc::clone(media),
+      media: Arc::new(
+        Mutex::new(
+          media
+        )
+      ),
     }
   }
 
   pub async fn run(
-    &self
+    self
   ) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(&self.addrs).await?;
     loop {
       let (socket, addr) = listener.accept().await?;
       tracing::trace!(%addr, "accepted client");
       tokio::spawn(
-        Self::handle_client(socket, self.media.clone()));
-    }
-  }
-
-  #[inline]
-  async fn handle_client(
-    socket: TcpStream,
-    media: Arc<MediaController>,
-  ) {
-    let mut framed = Codec::<AsServer>::new().framed(socket);
-    while let Some(Ok(request)) = framed.next().await {
-      tracing::trace!(%request, "C->S");
-      match handle_request(&request, media.clone()).await {
-        Ok(response) => {
-          tracing::trace!(%response, "S->C");
-          if let Err(err) = framed.send(response).await {
-            tracing::error!(%err, "error trying to send response");
-          }
-        },
-        Err(err) => {
-          tracing::error!(%err, "error handling request");
-        },
-      }
+        handle_client(
+          socket,
+          self.media.clone(),
+        )
+      );
     }
   }
 
@@ -85,11 +73,40 @@ How to open RTP muxer and specify the port:
 - https://ffmpeg.org/doxygen/2.1/rtpproto_8c.html#a4c0a351ea40886cc7efd4c4483b9d6a1
 */
 
+#[inline]
+async fn handle_client(
+  socket: TcpStream,
+  media: MediaController,
+) {
+  let mut framed = Codec::<AsServer>::new().framed(socket);
+  while let Some(Ok(request)) = framed.next().await {
+    tracing::trace!(%request, "C->S");
+    match handle_request(&request, media.clone()).await {
+      Ok(response) => {
+        tracing::trace!(%response, "S->C");
+        if let Err(err) = framed.send(response).await {
+          tracing::error!(%err, "error trying to send response");
+        }
+      },
+      Err(err) => {
+        tracing::error!(%err, "error handling request");
+      },
+    }
+  }
+}
+
 #[tracing::instrument(skip(media))]
 async fn handle_request(
   request: &Request,
-  media: Arc<MediaController>,
+  media: MediaController,
 ) -> Result<Response, Box<dyn Error + Send>> {
+  // Shorthand for locking and using the media controller, which is
+  // behind a mutex because it is shared across the task context.
+  let media =
+    || -> _ {
+      media.lock().unwrap()
+    };
+
   // Check the Require header and make sure all requested options are
   // supported or return response with 551 Option Not Supported.
   if !is_request_require_supported(request) {
@@ -107,7 +124,7 @@ async fn handle_request(
       },
       Method::Describe => {
         if is_request_one_of_content_types_supported(request) {
-          if let Some(media_sdp) = media.query_sdp(request.path()) {
+          if let Some(media_sdp) = media().query_sdp(request.path()) {
             reply_to_describe_with_media_sdp(request, media_sdp.clone())
           } else {
             reply_not_found(request)
@@ -129,22 +146,25 @@ async fn handle_request(
       /* Stateful */
       Method::Setup => {
         if request.session().is_none() {
-          // 1. If client passed Session ID and media item is already in playing state
-          //    then the client is trying to change transport parameters. We must respond
-          //    negatively with 455 Method Not Valid In This State.
-          //
-          //    (We can also choose to ignore aggregate control on SETUP by always returning
-          //     459 Aggregate Operation Not Allowed if the client has set Session at all
-          //     times.)
-          //
-          //    X
-          //
-          // 2. Register a session with a newly generated Session ID.
-          //
-          // 3. Parse permissable Transport header and generate a workable Transport header
-          //    from our side. This requires setting up the stream most likely to generate
-          //    correct RTP/RTCP client and server port tuples.
-          unimplemented!();
+          match media().register_session(request.path()) {
+            Ok(session) => {
+              // TODO Parse permissable Transport header and generate a workable Transport header
+              //      from our side. This requires setting up the stream most likely to generate
+              //      correct RTP/RTCP client and server port tuples.
+              unimplemented!()
+            },
+            Err(media::RegisterSessionError::NotFound) => {
+              reply_not_found(request)
+            },
+            // In the highly unlikely case that the randomly generated session was already
+            // in use before.
+            Err(media::RegisterSessionError::AlreadyExists) => {
+              tracing::error!(
+                %request,
+                "session id already present (collision)");
+              reply_internal_server_error(request)
+            },
+          }
         } else {
           // RFC specification allows negatively responding to SETUP request with Session
           // IDs by responding with 459 Aggregate Operation Not Allowed. By handling this
@@ -287,6 +307,15 @@ fn reply_aggregate_operation_not_allowed(
     %request,
     "refusing to do aggregate request");
   Response::error(Status::AggregateOperationNotAllowed)
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_internal_server_error(
+  request: &Request,
+) -> Response {
+  Response::error(Status::InternalServerError)
     .with_cseq_of(request)
     .build()
 }

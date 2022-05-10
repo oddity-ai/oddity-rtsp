@@ -6,7 +6,6 @@ mod worker;
 use std::error::Error;
 use std::env::args;
 use std::path::Path;
-use std::sync::Arc;
 
 use server::Server;
 use media::{Controller as MediaController, Descriptor};
@@ -41,9 +40,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
   tracing::info!(%media_controller, "initialized media controller");
 
-  let media_controller = Arc::new(media_controller);
-  let server = Server::new(
-    (settings.server.host, settings.server.port),
-    &media_controller);
-  server.run().await
+  Server::new(
+      (settings.server.host, settings.server.port),
+      media_controller
+    )
+    .run()
+    .await
 }
