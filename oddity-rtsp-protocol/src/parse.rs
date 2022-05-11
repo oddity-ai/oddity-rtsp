@@ -280,27 +280,8 @@ impl Parse for RequestMetadata {
       .next()
       .ok_or_else(|| Error::RequestLineMalformed {
         line: line.to_string(),
-      })?;
-
-    let method = match method {
-      "DESCRIBE"      => Method::Describe,
-      "ANNOUNCE"      => Method::Announce,
-      "SETUP"         => Method::Setup,
-      "PLAY"          => Method::Play,
-      "PAUSE"         => Method::Pause,
-      "RECORD"        => Method::Record,
-      "OPTIONS"       => Method::Options,
-      "REDIRECT"      => Method::Redirect,
-      "TEARDOWN"      => Method::Teardown,
-      "GET_PARAMETER" => Method::GetParameter,
-      "SET_PARAMETER" => Method::SetParameter,
-      _ => {
-        return Err(Error::MethodUnknown {
-          line: line.to_string(),
-          method: method.to_string(),
-        });
-      },
-    };
+      })?
+      .parse()?;
 
     let uri = parts
       .next()

@@ -1,9 +1,11 @@
 use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::fmt;
 
 use super::{
   parse::Parse,
   serialize::Serialize,
+  Error,
 };
 
 pub use http::uri::Uri;
@@ -52,6 +54,32 @@ impl fmt::Display for Method {
       Method::Teardown     => write!(f, "TEARDOWN"),
       Method::GetParameter => write!(f, "GET_PARAMETER"),
       Method::SetParameter => write!(f, "SET_PARAMETER"),
+    }
+  }
+
+}
+
+impl FromStr for Method {
+  type Err = Error;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    match s {
+      "DESCRIBE"      => Ok(Method::Describe),
+      "ANNOUNCE"      => Ok(Method::Announce),
+      "SETUP"         => Ok(Method::Setup),
+      "PLAY"          => Ok(Method::Play),
+      "PAUSE"         => Ok(Method::Pause),
+      "RECORD"        => Ok(Method::Record),
+      "OPTIONS"       => Ok(Method::Options),
+      "REDIRECT"      => Ok(Method::Redirect),
+      "TEARDOWN"      => Ok(Method::Teardown),
+      "GET_PARAMETER" => Ok(Method::GetParameter),
+      "SET_PARAMETER" => Ok(Method::SetParameter),
+      _ => Err(
+        Error::MethodUnknown {
+          method: s.to_string(),
+        },
+      )
     }
   }
 

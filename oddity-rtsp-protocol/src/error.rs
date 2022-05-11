@@ -29,7 +29,6 @@ pub enum Error {
   },
   /// The specified method is not a valid method.
   MethodUnknown {
-    line: String,
     method: String
   },
   /// The header first line does have a method, but it does not have
@@ -93,6 +92,39 @@ pub enum Error {
   /// This occurs when trying to serialize a request that does not
   /// have a known version.
   VersionUnknown,
+  // TODO Separate error type (?)
+  /// TODO
+  TransportProtocolProfileMissing {
+    value: String,
+  },
+  TransportLowerUnknown {
+    value: String,
+  },
+  /// TODO
+  TransportParameterUnknown {
+    var: String,
+  },
+  /// TODO
+  TransportParameterValueMissing {
+    var: String,
+  },
+  /// TODO
+  TransportParameterValueInvalid {
+    var: String,
+    val: String,
+  },
+  /// TODO
+  TransportParameterInvalid {
+    parameter: String,
+  },
+  /// Transport header channel is malformed.
+  TransportChannelMalformed {
+    value: String,
+  },
+  /// Transport header port is malformed.
+  TransportPortMalformed {
+    value: String,
+  },
   /// I/O error occurred.
   Io(io::Error),
 }

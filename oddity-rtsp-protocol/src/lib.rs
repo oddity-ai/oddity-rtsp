@@ -4,6 +4,7 @@ mod message;
 mod request;
 mod response;
 mod buffer;
+mod transport;
 mod error;
 
 #[cfg(feature = "tokio-codec")]
