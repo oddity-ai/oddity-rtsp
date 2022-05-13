@@ -9,6 +9,8 @@ use super::{
     Method,
     Uri,
   },
+  transport::Transport,
+  Error,
 };
 
 #[derive(Clone, Debug)]
@@ -68,6 +70,17 @@ impl Request {
     self.headers
       .get("Session")
       .map(|val| val.as_str())
+  }
+
+  pub fn transport(&self) -> Result<Vec<Transport>, Error> {
+    if let Some(value) = self.headers.get("Transport") {
+      value
+        .split(",")
+        .map(|part| part.parse())
+        .collect::<Result<Vec<_>, _>>()
+    } else {
+      Ok(Vec::new())
+    }
   }
 
 }

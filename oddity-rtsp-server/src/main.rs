@@ -2,6 +2,7 @@ mod server;
 mod media;
 mod settings;
 mod worker;
+mod transport;
 
 use std::error::Error;
 use std::env::args;

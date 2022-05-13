@@ -92,28 +92,33 @@ pub enum Error {
   /// This occurs when trying to serialize a request that does not
   /// have a known version.
   VersionUnknown,
-  // TODO Separate error type (?)
-  /// TODO
+  /// Transport header does not have protocol and profile string.
+  /// The transport must start with `RTP/AVP`, where `RTP` denotes
+  /// the protocol and `AVP` the profile.
   TransportProtocolProfileMissing {
     value: String,
   },
+  /// Transport header contains unknown lower protocol. Use either
+  /// `TCP` or `UDP`.
   TransportLowerUnknown {
     value: String,
   },
-  /// TODO
+  /// Transport header contains unknown parameter. Please see RFC
+  /// 2326 Section 12.39 for a list of permissable parameters.
   TransportParameterUnknown {
     var: String,
   },
-  /// TODO
+  /// Transport header contains parameter that should have a value,
+  /// but does not have one.
   TransportParameterValueMissing {
     var: String,
   },
-  /// TODO
+  /// Transport header contains parameter with invalid value.
   TransportParameterValueInvalid {
     var: String,
     val: String,
   },
-  /// TODO
+  /// Transport header contains invalid or malformed parameter.
   TransportParameterInvalid {
     parameter: String,
   },
@@ -141,8 +146,8 @@ impl fmt::Display for Error {
         write!(f, "version missing in request line: {}", &line),
       Error::StatusCodeMissing { line, } =>
         write!(f, "status code missing in response line: {}", &line),
-      Error::MethodUnknown { line, method, } =>
-        write!(f, "method unknown: {} (in request line: {})", &method, &line),
+      Error::MethodUnknown { method, } =>
+        write!(f, "method unknown: {}", &method),
       Error::UriMissing { line, } =>
         write!(f, "uri missing in request line: {}", &line),
       Error::UriMalformed { line, uri, } =>
@@ -171,6 +176,22 @@ impl fmt::Display for Error {
         write!(f, "parser not done yet"),
       Error::VersionUnknown =>
         write!(f, "response has unknown version"),
+      Error::TransportProtocolProfileMissing { value, } =>
+        write!(f, "transport protocol and/or profile missing: {}", &value),
+      Error::TransportLowerUnknown { value, } =>
+        write!(f, "transport lower protocol unknown: {}", &value),
+      Error::TransportParameterUnknown { var, } =>
+        write!(f, "transport parameter unknown: {}", &var),
+      Error::TransportParameterValueMissing { var, } =>
+        write!(f, "transport parameter should have value but does not (var: {})", &var),
+      Error::TransportParameterValueInvalid { var, val, } =>
+        write!(f, "transport parameter value is invalid or malformed (var: {}, val: {})", &var, &val),
+      Error::TransportParameterInvalid { parameter, } =>
+        write!(f, "transport parameter invalid: {}", &parameter),
+      Error::TransportChannelMalformed { value, } =>
+        write!(f, "transport channel malformed: {}", &value),
+      Error::TransportPortMalformed { value, } =>
+        write!(f, "transport port malformed: {}", &value),
       Error::Io(err) =>
         write!(f, "{}", err),
     }

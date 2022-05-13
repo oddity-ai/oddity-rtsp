@@ -7,9 +7,57 @@ use super::{
   Error,
 };
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Transport {
   lower: Option<Lower>,
   parameters: Vec<Parameter>,
+}
+
+impl Transport {
+
+  pub fn new() -> Self {
+    Self {
+      lower: None,
+      parameters: Vec::new(),
+    }
+  }
+
+  pub fn with_lower_protocol(
+    mut self,
+    lower: Lower,
+  ) -> Self {
+    self.lower = Some(lower);
+    self
+  }
+
+  pub fn with_parameter(
+    mut self,
+    parameter: Parameter,
+  ) -> Self {
+    self.parameters.push(parameter);
+    self
+  }
+
+  pub fn with_parameters(
+    mut self,
+    parameters: impl IntoIterator<Item=Parameter>,
+  ) -> Self {
+    self.parameters.extend(parameters);
+    self
+  }
+
+  pub fn lower_protocol(&self) -> Option<&Lower> {
+    self.lower.as_ref()
+  }
+
+  pub fn parameters(&self) -> &impl IntoIterator<Item=Parameter> {
+    &self.parameters
+  }
+
+  pub fn parameters_iter(&self) -> impl Iterator<Item=&Parameter> {
+    self.parameters.iter()
+  }
+
 }
 
 impl fmt::Display for Transport {
@@ -22,7 +70,7 @@ impl fmt::Display for Transport {
     for parameter in self.parameters.iter() {
       write!(f, ";{}", parameter)?;
     }
-    writeln!(f)
+    Ok(())
   }
 
 }
@@ -31,50 +79,46 @@ impl FromStr for Transport {
   type Err = Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let mut parts = s.split(",");
-    let protocol = parts
-      .next()
-      .ok_or_else(||
+    let (spec, params) = s
+      .split_once(';')
+      .map(|(spec, params)| (spec, Some(params)))
+      .unwrap_or_else(|| (s, None));
+
+    if spec.starts_with("RTP/AVP") {
+      let lower = spec
+        .split("/")
+        .nth(2)
+        .map(|lower| lower.parse())
+        .transpose()?;
+
+      let parameters = params
+        .map(|params| {
+          params
+            .split(";")
+            .map(|p| p.parse())
+            .collect::<Result<Vec<_>, _>>()
+        })
+        .transpose()?
+        .unwrap_or_default();
+
+      Ok(
+        Transport {
+          lower,
+          parameters,
+        }
+      )
+    } else {
+      Err(
         Error::TransportProtocolProfileMissing {
           value: s.to_string(),
         }
-      )?;
-
-    let rest = parts
-      .next()
-      .ok_or_else(||
-        Error::TransportProtocolProfileMissing {
-          value: s.to_string(),
-        }
-      )?;
-
-    let mut rest_parts = rest.split(";");
-    let profile = rest_parts
-      .next()
-      .ok_or_else(||
-        Error::TransportProtocolProfileMissing {
-          value: s.to_string(),
-        }
-      )?;
-
-    // TODO THIS DOES NOT HANDLE CASE WHERE LOWER IS IN STRING
-    let parameters = parts
-      .next()
-      .map(|s| {
-        
-      })
-      .unwrap_or(Vec::new());
-
-    Ok(
-      Transport {
-        lower: lower,
-        parameters: parameters,
-      }
-    )
+      )
+    }
   }
 
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Lower {
   Tcp,
   Udp,
@@ -108,6 +152,7 @@ impl FromStr for Lower {
 
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Parameter {
   Unicast,
   Multicast,
@@ -206,7 +251,6 @@ impl FromStr for Parameter {
     }
 
     match var {
-      // TODO check not both
       "unicast"       => Ok(Parameter::Unicast),
       "multicast"     => Ok(Parameter::Multicast),
       "destination"   => {
@@ -251,6 +295,9 @@ impl FromStr for Parameter {
       },
       "mode"           => {
         let val = val_or_err()?;
+        let val = val
+          .strip_prefix("\"").unwrap_or(val)
+          .strip_suffix("\"").unwrap_or(val);
         let method = parse_or_err(var, val)?;
         Ok(Parameter::Mode(method))
       },
@@ -264,6 +311,7 @@ impl FromStr for Parameter {
 
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Channel {
   Single(u16),
   Range(u16, u16),
@@ -288,7 +336,7 @@ impl FromStr for Channel {
   type Err = Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let mut parts = s.split(",");
+    let mut parts = s.split("-");
     let channel_1 = parts
       .next()
       .and_then(|channel| channel.parse::<u16>().ok())
@@ -311,6 +359,7 @@ impl FromStr for Channel {
 
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum Port {
   Single(u16),
   Range(u16, u16),
@@ -335,7 +384,7 @@ impl FromStr for Port {
   type Err = Error;
 
   fn from_str(s: &str) -> Result<Self, Self::Err> {
-    let mut parts = s.split(",");
+    let mut parts = s.split("-");
     let port_1 = parts
       .next()
       .and_then(|port| port.parse::<u16>().ok())
@@ -354,6 +403,261 @@ impl FromStr for Port {
         Port::Single(port_1)
       }
     )
+  }
+
+}
+
+mod tests {
+
+  use super::{
+    Transport,
+    Lower,
+    Parameter,
+    Channel,
+    Port,
+    Method,
+    Error,
+  };
+
+  #[test]
+  fn parse_minimal() {
+    assert_eq!(
+      "RTP/AVP".parse::<Transport>().unwrap(),
+      Transport::new(),
+    );
+  }
+
+  #[test]
+  fn parse_lower_tcp() {
+    assert_eq!(
+      "RTP/AVP/TCP".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Tcp),
+    );
+  }
+
+  #[test]
+  fn parse_lower_udp() {
+    assert_eq!(
+      "RTP/AVP/UDP".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp),
+    );
+  }
+
+  #[test]
+  fn parse_unicast() {
+    assert_eq!(
+      "RTP/AVP;unicast".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_parameter(Parameter::Unicast),
+    );
+  }
+
+  #[test]
+  fn parse_destination_missing_value() {
+    assert!(
+      matches!(
+        "RTP/AVP/UDP;destination".parse::<Transport>(),
+        Err(Error::TransportParameterValueMissing { var: _, }),
+      ),
+    );
+  }
+
+  #[test]
+  fn parse_destination_ip() {
+    assert_eq!(
+      "RTP/AVP/UDP;destination=127.0.0.1".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Destination([127, 0, 0, 1].into())),
+    );
+  }
+
+  #[test]
+  fn parse_interleaved_invalid() {
+    assert!(
+      matches!(
+        "RTP/AVP/UDP;interleaved=invalid".parse::<Transport>(),
+        Err(Error::TransportParameterValueInvalid { var: _, val: _, }),
+      ),
+    );
+  }
+  
+  #[test]
+  fn parse_interleaved_channel() {
+    assert_eq!(
+      "RTP/AVP/UDP;interleaved=8-9".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Interleaved(Channel::Range(8, 9))),
+    );
+  }
+
+  #[test]
+  fn parse_layers() {
+    assert_eq!(
+      "RTP/AVP/UDP;layers=3".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Layers(3)),
+    );
+  }
+
+  #[test]
+  fn parse_port_single() {
+    assert_eq!(
+      "RTP/AVP/UDP;port=3".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Port(Port::Single(3))),
+    );
+  }
+
+  #[test]
+  fn parse_server_port_range() {
+    assert_eq!(
+      "RTP/AVP/UDP;server_port=3-4".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::ServerPort(Port::Range(3, 4))),
+    );
+  }
+
+  #[test]
+  fn parse_ssrc() {
+    assert_eq!(
+      "RTP/AVP/UDP;ssrc=ABCDEF".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Ssrc("ABCDEF".to_string())),
+    );
+  }
+
+  #[test]
+  fn parse_mode_method_unknown() {
+    assert!(
+      matches!(
+        "RTP/AVP/UDP;mode=UNKNOWN".parse::<Transport>(),
+        Err(Error::TransportParameterValueInvalid { var: _, val: _, }),
+      ),
+    );
+  }
+
+  #[test]
+  fn parse_mode_method() {
+    assert_eq!(
+      "RTP/AVP/UDP;mode=PLAY".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Mode(Method::Play)),
+    );
+    assert_eq!(
+      "RTP/AVP/UDP;mode=\"PLAY\"".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Mode(Method::Play)),
+    );
+  }
+
+  #[test]
+  fn parse_rfc2326_section_12_39_examples() {
+    assert_eq!(
+      "RTP/AVP;multicast;ttl=127;mode=\"PLAY\"".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_parameter(Parameter::Multicast)
+        .with_parameter(Parameter::Ttl(127))
+        .with_parameter(Parameter::Mode(Method::Play)),
+    );
+    assert_eq!(
+      "RTP/AVP;unicast;client_port=3456-3457;mode=\"PLAY\"".parse::<Transport>().unwrap(),
+      Transport::new()
+        .with_parameter(Parameter::Unicast)
+        .with_parameter(Parameter::ClientPort(Port::Range(3456, 3457)))
+        .with_parameter(Parameter::Mode(Method::Play)),
+    );
+  }
+
+  #[test]
+  fn format_minimal() {
+    assert_eq!(
+      &Transport::new()
+        .to_string(),
+      "RTP/AVP",
+    );
+  }
+
+  #[test]
+  fn format_lower_tcp() {
+    assert_eq!(
+      &Transport::new()
+        .with_lower_protocol(Lower::Tcp)
+        .to_string(),
+      "RTP/AVP/TCP",
+    );
+  }
+
+  #[test]
+  fn format_lower_udp() {
+    assert_eq!(
+      &Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .to_string(),
+      "RTP/AVP/UDP",
+    );
+  }
+
+  #[test]
+  fn format_unicast() {
+    assert_eq!(
+      &Transport::new()
+        .with_lower_protocol(Lower::Udp)
+        .with_parameter(Parameter::Unicast)
+        .to_string(),
+      "RTP/AVP/UDP;unicast",
+    );
+  }
+
+  #[test]
+  fn format_rfc2326_section_12_39_examples() {
+    assert_eq!(
+      &Transport::new()
+        .with_parameter(Parameter::Multicast)
+        .with_parameter(Parameter::Ttl(127))
+        .with_parameter(Parameter::Mode(Method::Play))
+        .to_string(),
+      "RTP/AVP;multicast;ttl=127;mode=\"PLAY\"",
+    );
+    assert_eq!(
+      &Transport::new()
+        .with_parameter(Parameter::Unicast)
+        .with_parameter(Parameter::ClientPort(Port::Range(3456, 3457)))
+        .with_parameter(Parameter::Mode(Method::Play))
+        .to_string(),
+      "RTP/AVP;unicast;client_port=3456-3457;mode=\"PLAY\"",
+    );
+  }
+
+  #[test]
+  fn format_all_parameters() {
+    assert_eq!(
+      &Transport::new()
+        .with_lower_protocol(Lower::Tcp)
+        .with_parameter(Parameter::Unicast)
+        .with_parameter(Parameter::Multicast)
+        .with_parameter(Parameter::Destination([1, 2, 3, 4].into()))
+        .with_parameter(Parameter::Interleaved(Channel::Range(1234, 1235)))
+        .with_parameter(Parameter::Append)
+        .with_parameter(Parameter::Ttl(999))
+        .with_parameter(Parameter::Layers(2))
+        .with_parameter(Parameter::Port(Port::Single(8)))
+        .with_parameter(Parameter::ClientPort(Port::Range(9, 10)))
+        .with_parameter(Parameter::ServerPort(Port::Range(11, 12)))
+        .with_parameter(Parameter::Ssrc("01234ABCDEF".to_string()))
+        .with_parameter(Parameter::Mode(Method::Describe))
+        .to_string(),
+      "RTP/AVP/TCP;unicast;multicast;destination=1.2.3.4;interleaved=1234-1235;append;ttl=999;layers=2;port=8;client_port=9-10;server_port=11-12;ssrc=01234ABCDEF;mode=\"DESCRIBE\"",
+    );
   }
 
 }

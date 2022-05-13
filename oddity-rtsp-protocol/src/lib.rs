@@ -27,6 +27,7 @@ pub use message::{
 };
 pub use request::Request;
 pub use response::Response;
+pub use transport::Transport;
 pub use error::{
   Result,
   Error,
