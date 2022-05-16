@@ -11,6 +11,7 @@ use super::{
 
 pub struct Controller {
   sources: HashMap<String, Source>,
+  // TODO mutex here should not be necessary anymore since there's one in server as well
   sessions: HashMap<SessionId, Mutex<Session>>,
 }
 
