@@ -71,8 +71,7 @@ impl<T: Target> Decoder for Codec<T> {
 
 }
 
-impl<T: Target> Encoder<T::Send> for Codec<T>
-{
+impl<T: Target> Encoder<T::Send> for Codec<T> {
   type Error = Error;
 
   fn encode(

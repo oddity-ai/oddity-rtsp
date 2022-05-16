@@ -27,7 +27,13 @@ pub use message::{
 };
 pub use request::Request;
 pub use response::Response;
-pub use transport::Transport;
+pub use transport::{
+  Transport,
+  Parameter,
+  Lower,
+  Channel,
+  Port,
+};
 pub use error::{
   Result,
   Error,

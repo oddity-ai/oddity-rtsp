@@ -1,5 +1,6 @@
 // TODO(gerwin) Refactor into `oddity-threading` crate.
 
+// TODO(gerwin) Cannot use in conjunction with tokio???
 use std::thread::{
   spawn,
   JoinHandle,
