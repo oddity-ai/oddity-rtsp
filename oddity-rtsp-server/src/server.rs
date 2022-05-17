@@ -1,9 +1,16 @@
+use std::net::{
+  ToSocketAddrs,
+  TcpListener,
+};
 use std::error::Error;
-// TODO should use tokio mutex
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-use super::media;
-use super::connection::Connection;
+use concurrency::ServicePool;
+
+use super::{
+  media,
+  connection::Connection,
+};
 
 // TODO duplicate
 type MediaController = Arc<Mutex<media::Controller>>;
@@ -11,6 +18,7 @@ type MediaController = Arc<Mutex<media::Controller>>;
 pub struct Server<A: ToSocketAddrs + 'static> {
   addrs: A,
   media: MediaController,
+  connections: ServicePool,
 }
 
 impl<A: ToSocketAddrs + 'static> Server<A> {
@@ -26,17 +34,28 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
           media
         )
       ),
+      connections: ServicePool::new(),
     }
   }
 
-  pub async fn run(
+  pub fn run(
     self
   ) -> Result<(), Box<dyn Error>> {
-    let listener = TcpListener::bind(&self.addrs).await?;
+    let listener = TcpListener::bind(&self.addrs)?;
     loop {
-      let (socket, addr) = listener.accept().await?;
+      let (socket, addr) = listener.accept()?;
       tracing::trace!(%addr, "accepted client");
-      tokio::spawn(Connection::spawn(socket, self.media.clone()));
+
+      self.connections.spawn(
+        move |stop_rx| {
+          Connection::new(
+              socket,
+              &self.media,
+              stop_rx,
+            )
+            .run();
+        }
+      );
     }
   }
 

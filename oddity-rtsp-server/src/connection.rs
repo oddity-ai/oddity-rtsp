@@ -1,5 +1,7 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
+use std::io::{BufReader, BufWriter};
+use std::net::{TcpStream, Shutdown};
 
 use oddity_rtsp_protocol::{
   Request,
@@ -11,7 +13,11 @@ use oddity_rtsp_protocol::{
   Method,
 };
 
-use concurrency::ServicePool;
+use concurrency::{
+  Service,
+  StopRx,
+  net,
+};
 
 use super::media;
 
@@ -19,15 +25,61 @@ use super::media;
 type MediaController = Arc<Mutex<media::Controller>>;
 
 pub struct Connection {
-  tx: Sender<ResponseMaybeInterleaved>,
+  //tx: Sender<ResponseMaybeInterleaved>, TODO
+  shutdown_handle: net::ShutdownHandle,
+  reader: BufReader<TcpStream>,
+  writer: BufWriter<TcpStream>,
+  media: MediaController,
+  stop_rx: StopRx,
 }
 
 impl Connection {
 
-  pub fn spawn(
+  pub fn new(
     socket: TcpStream,
-    media: MediaController,
+    media: &MediaController,
+    stop_rx: StopRx,
+  ) -> Self {
+    let (reader, writer, shutdown_handle) = net::split(socket);
+    Self {
+      shutdown_handle,
+      reader,
+      writer,
+      media: media.clone(),
+      stop_rx,
+    }
+  }
+
+  pub fn run(
+    &mut self,
   ) {
+    let reader_service = Service::spawn(
+      // Note: Don't need to use `_stop_rx` since we're using the
+      // socket shutdown handle to signal cancellation to the I/O
+      // reader and writer services.
+      move |_stop_rx| {
+
+      }
+    );
+    
+    let writer_service = Service::spawn(
+      // Note: Don't need to use `_stop_rx` since we're using the
+      // socket shutdown handle to signal cancellation to the I/O
+      // reader and writer services.
+      move |_stop_rx| {
+
+      }
+    );
+    
+    self.stop_rx.wait();
+    if let Ok(()) = self.shutdown_handle.shutdown(Shutdown::Both) {
+      drop(reader_service);
+      drop(writer_service);
+    } else {
+      tracing::warn!("failed to shutdown socket");
+    }
+  }
+    
     
     /*
 
@@ -47,7 +99,6 @@ impl Connection {
       }
     }
     */
-  }
 
 }
 
@@ -70,7 +121,7 @@ fn handle_request(
 ) -> Result<Response, Box<dyn Error + Send>> {
   // Shorthand for unlocking the media controller.
   macro_rules! media {
-    () => { media.lock() };
+    () => { media.lock().unwrap() };
   }
 
   // Check the Require header and make sure all requested options are

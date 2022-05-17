@@ -9,10 +9,7 @@ pub use controller::{
   Controller,
   RegisterSessionError,
 };
-pub use source::{
-  Source,
-  Rx as SourceRx,
-};
+pub use source::Source;
 pub use session::{
   SessionId,
   Session,

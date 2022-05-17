@@ -4,7 +4,6 @@ mod media;
 mod settings;
 mod transport;
 
-use std::error::Error;
 use std::env::args;
 use std::path::Path;
 
@@ -22,16 +21,28 @@ fn main() {
     .unwrap_or("default.yaml".to_string());
   let settings_file = Path::new(&settings_file);
 
-  let settings = Settings::from_file(settings_file)?;
+  let settings = Settings::from_file(settings_file)
+    .expect("failed to parse settings");
   tracing::debug!(?settings, "read settings file");
 
   let mut media_controller = MediaController::new();
   for media_item in settings.media.iter() {
     let descriptor = match media_item.kind {
-      MediaKind::File
-        => Descriptor::File(media_item.source.as_str().into()),
-      MediaKind::Stream
-        => Descriptor::Stream(media_item.source.parse()?),
+      MediaKind::File => {
+        Descriptor::File(
+          media_item
+            .source
+            .as_str()
+            .into()
+        )
+      },
+      MediaKind::Stream => {
+        Descriptor::Stream(
+          media_item.source
+            .parse()
+            .expect("failed to parse stream URL")
+        )
+      },
     };
 
     media_controller.register_source(&media_item.path, &descriptor);
@@ -45,5 +56,5 @@ fn main() {
       media_controller
     )
     .run()
-    .await
+    .expect("failed to run server");
 }
