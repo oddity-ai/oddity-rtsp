@@ -2,7 +2,6 @@ mod server;
 mod connection;
 mod media;
 mod settings;
-mod worker;
 mod transport;
 
 use std::error::Error;

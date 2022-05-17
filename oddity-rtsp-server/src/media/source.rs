@@ -1,4 +1,3 @@
-mod comm;
 mod msg;
 
 use std::sync::Arc;

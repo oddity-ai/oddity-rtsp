@@ -11,6 +11,8 @@ use oddity_rtsp_protocol::{
   Method,
 };
 
+use concurrency::ServicePool;
+
 use super::media;
 
 // TODO duplicate
@@ -27,6 +29,7 @@ impl Connection {
     media: MediaController,
   ) {
     
+    /*
 
     let mut framed = Codec::<AsServer>::new().framed(socket);
     while let Some(Ok(request)) = framed.next().await {
@@ -43,6 +46,7 @@ impl Connection {
         },
       }
     }
+    */
   }
 
 }
