@@ -130,6 +130,9 @@ pub enum Error {
   TransportPortMalformed {
     value: String,
   },
+  /// Interleaved payload too large. The size cannot be larger than
+  /// the maximum value of a 16-bit unsigned integer.
+  InterleavedPayloadTooLarge,
   /// I/O error occurred.
   Io(io::Error),
 }
@@ -192,6 +195,8 @@ impl fmt::Display for Error {
         write!(f, "transport channel malformed: {}", &value),
       Error::TransportPortMalformed { value, } =>
         write!(f, "transport port malformed: {}", &value),
+      Error::InterleavedPayloadTooLarge =>
+        write!(f, "interleaved payload too large"),
       Error::Io(err) =>
         write!(f, "{}", err),
     }

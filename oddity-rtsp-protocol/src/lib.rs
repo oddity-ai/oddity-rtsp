@@ -1,6 +1,7 @@
 mod parse;
 mod serialize;
 mod message;
+mod interleaved;
 mod request;
 mod response;
 mod buffer;
@@ -27,6 +28,7 @@ pub use message::{
 };
 pub use request::Request;
 pub use response::Response;
+pub use interleaved::ResponseMaybeInterleaved;
 pub use transport::{
   Transport,
   Parameter,

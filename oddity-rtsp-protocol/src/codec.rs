@@ -14,11 +14,12 @@ use super::{
   message::Message,
   request::Request,
   response::Response,
+  interleaved::ResponseMaybeInterleaved,
   error::Error,
 };
 
 pub trait Target {
-  type Send: Message + Serialize;
+  type Send: Serialize;
   type Receive: Message;
 }
 
@@ -32,7 +33,7 @@ impl Target for AsClient {
 pub struct AsServer;
 
 impl Target for AsServer {
-  type Send = Response;
+  type Send = ResponseMaybeInterleaved;
   type Receive = Request;
 }
 

@@ -1,15 +1,10 @@
 use std::error::Error;
-use std::sync::Arc;
-
-use futures::{StreamExt, SinkExt, Stream, Sink};
-
-use tokio::sync::Mutex;
-use tokio::net::TcpStream;
-use tokio_util::codec::Decoder;
+use std::sync::{Arc, Mutex};
 
 use oddity_rtsp_protocol::{
   Request,
   Response,
+  ResponseMaybeInterleaved,
   Status,
   Codec,
   AsServer,
@@ -18,22 +13,23 @@ use oddity_rtsp_protocol::{
 
 use super::media;
 
-// TODO very good example: https://github.com/jgallagher/tokio-chat-example/blob/master/tokio-chat-server/src/main.rs#L185
-
 // TODO duplicate
 type MediaController = Arc<Mutex<media::Controller>>;
 
 pub struct Connection {
+  tx: Sender<ResponseMaybeInterleaved>,
 }
 
 impl Connection {
 
-  pub async fn spawn(
+  pub fn spawn(
     socket: TcpStream,
     media: MediaController,
   ) {
-    let (reader, writer) = Codec::<AsServer>::new().framed(socket).split();
-    while let Some(Ok(request)) = reader.next().await {
+    
+
+    let mut framed = Codec::<AsServer>::new().framed(socket);
+    while let Some(Ok(request)) = framed.next().await {
       tracing::trace!(%request, "C->S");
       match handle_request(&request, media.clone()).await {
         Ok(response) => {
@@ -64,15 +60,13 @@ How to open RTP muxer and specify the port:
 */
 
 #[tracing::instrument(skip(media))]
-async fn handle_request(
+fn handle_request(
   request: &Request,
   media: MediaController,
 ) -> Result<Response, Box<dyn Error + Send>> {
   // Shorthand for unlocking the media controller.
   macro_rules! media {
-    () => {
-      media.lock().await
-    };
+    () => { media.lock() };
   }
 
   // Check the Require header and make sure all requested options are

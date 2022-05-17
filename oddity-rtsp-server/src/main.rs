@@ -13,8 +13,7 @@ use server::Server;
 use media::{Controller as MediaController, Descriptor};
 use settings::{Settings, MediaKind};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() {
   tracing_subscriber::fmt()
     .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG"))
     .init();

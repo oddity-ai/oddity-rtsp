@@ -2,14 +2,6 @@ use std::error::Error;
 // TODO should use tokio mutex
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
-use tokio::net::{
-  TcpListener,
-  TcpStream,
-  ToSocketAddrs,
-};
-
-
 use super::media;
 use super::connection::Connection;
 
