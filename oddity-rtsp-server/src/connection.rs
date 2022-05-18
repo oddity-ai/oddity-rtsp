@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
-use std::io::{BufReader, BufWriter};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::{TcpStream, Shutdown};
 
 use oddity_rtsp_protocol::{
@@ -17,6 +17,7 @@ use concurrency::{
   Service,
   StopRx,
   net,
+  channel,
 };
 
 use super::media;
@@ -51,28 +52,46 @@ impl Connection {
   }
 
   pub fn run(
-    &mut self,
+    mut self,
   ) {
-    let reader_service = Service::spawn(
+    let (writer_tx, writer_rx) =
+      channel::default::<ResponseMaybeInterleaved>();
+
+    let reader_service = Service::spawn({
+      let reader = self.reader;
       // Note: Don't need to use `_stop_rx` since we're using the
       // socket shutdown handle to signal cancellation to the I/O
       // reader and writer services.
       move |_stop_rx| {
-
+        /* TODO create some kind of reader that wraps TcpStream and does its thing */
       }
-    );
+    });
     
-    let writer_service = Service::spawn(
-      // Note: Don't need to use `_stop_rx` since we're using the
-      // socket shutdown handle to signal cancellation to the I/O
-      // reader and writer services.
-      move |_stop_rx| {
-
+    let writer_service = Service::spawn({
+      let writer = self.writer;
+      move |stop_rx| {
+        loop {
+          channel::select! {
+            recv(writer_rx) -> msg => {
+              if let Ok(msg) = msg {
+                // TODO writer write everything
+              } else {
+                tracing::error!("writer channel failed unexpectedly");
+                break;
+              }
+            },
+            recv(stop_rx.into_rx()) -> _ => {
+              tracing::trace!("connection writer stopping");
+              break;
+            },
+          }
+        }
       }
-    );
+    });
     
     self.stop_rx.wait();
     if let Ok(()) = self.shutdown_handle.shutdown(Shutdown::Both) {
+      // Stop and wait for reader/writer to join.
       drop(reader_service);
       drop(writer_service);
     } else {

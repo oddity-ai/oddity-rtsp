@@ -83,6 +83,11 @@ impl StopRx {
     }
   }
 
+  /// Convert back to channel.
+  pub fn into_rx(self) -> Receiver<()> {
+    self.rx
+  }
+
 }
 
 impl From<Receiver<()>> for StopRx {
