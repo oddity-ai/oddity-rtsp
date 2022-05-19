@@ -1,163 +1,15 @@
 use std::error::Error;
-use std::sync::{Arc, Mutex};
-use std::net::{TcpStream, Shutdown};
 
 use oddity_rtsp_protocol::{
-  RtspRequestReader,
-  RtspResponseWriter,
   Request,
   Response,
-  ResponseMaybeInterleaved,
-  Status,
   Method,
-  Error as RtspError,
+  Status,
 };
 
-use concurrency::{
-  Service,
-  StopRx,
-  net,
-  channel,
-};
+use crate::media;
 
-use super::media;
-
-// TODO duplicate
-type MediaController = Arc<Mutex<media::Controller>>;
-
-type WriterRx = channel::Receiver<ResponseMaybeInterleaved>;
-type WriterTx = channel::Sender<ResponseMaybeInterleaved>;
-
-pub struct Connection {
-  shutdown_handle: net::ShutdownHandle,
-  reader: RtspRequestReader<TcpStream>,
-  writer: RtspResponseWriter<TcpStream>,
-  media: MediaController,
-  stop_rx: StopRx,
-}
-
-impl Connection {
-
-  pub fn new(
-    socket: TcpStream,
-    media: &MediaController,
-    stop_rx: StopRx,
-  ) -> Self {
-    let (reader, writer, shutdown_handle) = net::split(socket);
-    Self {
-      shutdown_handle,
-      reader,
-      writer,
-      media: media.clone(),
-      stop_rx,
-    }
-  }
-
-  pub fn run(
-    mut self,
-  ) {
-    let (writer_tx, writer_rx) =
-      channel::default::<ResponseMaybeInterleaved>();
-
-    let reader_service = Service::spawn({
-      let reader = self.reader;
-      let media = self.media.clone();
-      let writer_tx = writer_tx.clone();
-      // Note: Don't need to use `_stop_rx` since we're using the
-      // socket shutdown handle to signal cancellation to the I/O
-      // reader and writer services.
-      move |_stop_rx| reader_loop(
-        reader,
-        media,
-        writer_tx,
-      )
-    });
-    
-    let writer_service = Service::spawn({
-      let writer = self.writer;
-      move |stop_rx| writer_loop(
-        writer,
-        writer_rx,
-        stop_rx,
-      )
-    });
-    
-    self.stop_rx.wait();
-    if let Err(_) = self.shutdown_handle.shutdown(Shutdown::Both) {
-      tracing::warn!("failed to shutdown socket");
-    }
-    
-    // Dropping reader and writer services will automatically join.
-  }
-    
-}
-
-fn reader_loop(
-  reader: RtspRequestReader<TcpStream>,
-  media: MediaController,
-  writer_tx: WriterTx,
-) {
-  loop {
-    match reader.read() {
-      Ok(request) => {
-        match handle_request(
-          &request,
-          media.clone(),
-        ) {
-          Ok(response) => {
-            if let Err(_) = writer_tx.send(
-              ResponseMaybeInterleaved::Message(response)
-            ) {
-              tracing::error!("writer channel failed unexpectedly");
-              break;
-            }
-          },
-          Err(err) => {
-            tracing::error!(
-              %err, %request,
-              "failed to handle request"
-            );
-          }
-        }
-      },
-      Err(RtspError::Shutdown) => {
-        tracing::trace!("connection reader stopping");
-        break;
-      },
-      Err(err) => {
-        tracing::error!(%err, "read failed");
-        break;
-      },
-    }
-  }
-}
-
-fn writer_loop(
-  writer: RtspResponseWriter<TcpStream>,
-  writer_rx: WriterRx,
-  stop_rx: StopRx,
-) {
-  loop {
-    channel::select! {
-      recv(writer_rx) -> response => {
-        if let Ok(response) = response {
-          if let Err(err) = writer.write(response) {
-            tracing::error!(%err, "write failed");
-            break;
-          }
-        } else {
-          tracing::error!("writer channel failed unexpectedly");
-          break;
-        }
-      },
-      recv(stop_rx.into_rx()) -> _ => {
-        tracing::trace!("connection writer stopping");
-        break;
-      },
-    };
-  }
-}
-
+use super::conn::MediaController;
 
 /*
 TODO
@@ -171,7 +23,7 @@ How to open RTP muxer and specify the port:
 */
 
 #[tracing::instrument(skip(media))]
-fn handle_request(
+pub fn handle_request(
   request: &Request,
   media: MediaController,
 ) -> Result<Response, Box<dyn Error + Send>> {

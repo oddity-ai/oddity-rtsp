@@ -1,5 +1,5 @@
 mod server;
-mod connection;
+mod conn;
 mod media;
 mod settings;
 mod transport;
