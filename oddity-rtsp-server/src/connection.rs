@@ -25,6 +25,9 @@ use super::media;
 // TODO duplicate
 type MediaController = Arc<Mutex<media::Controller>>;
 
+type WriterRx = channel::Receiver<ResponseMaybeInterleaved>;
+type WriterTx = channel::Sender<ResponseMaybeInterleaved>;
+
 pub struct Connection {
   shutdown_handle: net::ShutdownHandle,
   reader: RtspRequestReader<TcpStream>,
@@ -63,66 +66,20 @@ impl Connection {
       // Note: Don't need to use `_stop_rx` since we're using the
       // socket shutdown handle to signal cancellation to the I/O
       // reader and writer services.
-      move |_stop_rx| {
-        loop {
-          match reader.read() {
-            Ok(request) => {
-              match handle_request(
-                &request,
-                media.clone(),
-              ) {
-                Ok(response) => {
-                  if let Err(_) = writer_tx.send(
-                    ResponseMaybeInterleaved::Message(response)
-                  ) {
-                    tracing::error!("writer channel failed unexpectedly");
-                    break;
-                  }
-                },
-                Err(err) => {
-                  tracing::error!(
-                    %err, %request,
-                    "failed to handle request"
-                  );
-                }
-              }
-            },
-            Err(RtspError::Shutdown) => {
-              tracing::trace!("connection reader stopping");
-              break;
-            },
-            Err(err) => {
-              tracing::error!(%err, "read failed");
-              break;
-            },
-          }
-        }
-      }
+      move |_stop_rx| reader_loop(
+        reader,
+        media,
+        writer_tx,
+      )
     });
     
     let writer_service = Service::spawn({
       let writer = self.writer;
-      move |stop_rx| {
-        loop {
-          channel::select! {
-            recv(writer_rx) -> response => {
-              if let Ok(response) = response {
-                if let Err(err) = writer.write(response) {
-                  tracing::error!(%err, "write failed");
-                  break;
-                }
-              } else {
-                tracing::error!("writer channel failed unexpectedly");
-                break;
-              }
-            },
-            recv(stop_rx.into_rx()) -> _ => {
-              tracing::trace!("connection writer stopping");
-              break;
-            },
-          }
-        }
-      }
+      move |stop_rx| writer_loop(
+        writer,
+        writer_rx,
+        stop_rx,
+      )
     });
     
     self.stop_rx.wait();
@@ -133,6 +90,72 @@ impl Connection {
     // Dropping reader and writer services will automatically join.
   }
     
+}
+
+fn reader_loop(
+  reader: RtspRequestReader<TcpStream>,
+  media: MediaController,
+  writer_tx: WriterTx,
+) {
+  loop {
+    match reader.read() {
+      Ok(request) => {
+        match handle_request(
+          &request,
+          media.clone(),
+        ) {
+          Ok(response) => {
+            if let Err(_) = writer_tx.send(
+              ResponseMaybeInterleaved::Message(response)
+            ) {
+              tracing::error!("writer channel failed unexpectedly");
+              break;
+            }
+          },
+          Err(err) => {
+            tracing::error!(
+              %err, %request,
+              "failed to handle request"
+            );
+          }
+        }
+      },
+      Err(RtspError::Shutdown) => {
+        tracing::trace!("connection reader stopping");
+        break;
+      },
+      Err(err) => {
+        tracing::error!(%err, "read failed");
+        break;
+      },
+    }
+  }
+}
+
+fn writer_loop(
+  writer: RtspResponseWriter<TcpStream>,
+  writer_rx: WriterRx,
+  stop_rx: StopRx,
+) {
+  loop {
+    channel::select! {
+      recv(writer_rx) -> response => {
+        if let Ok(response) = response {
+          if let Err(err) = writer.write(response) {
+            tracing::error!(%err, "write failed");
+            break;
+          }
+        } else {
+          tracing::error!("writer channel failed unexpectedly");
+          break;
+        }
+      },
+      recv(stop_rx.into_rx()) -> _ => {
+        tracing::trace!("connection writer stopping");
+        break;
+      },
+    };
+  }
 }
 
 
