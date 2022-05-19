@@ -6,10 +6,11 @@ mod request;
 mod response;
 mod buffer;
 mod transport;
+mod io;
 mod error;
 
 #[cfg(feature = "tokio-codec")]
-mod codec;
+mod tokio;
 
 pub use parse::{
   RequestParser,
@@ -36,15 +37,21 @@ pub use transport::{
   Channel,
   Port,
 };
+pub use io::{
+  RtspWriter,
+  RtspReader,
+  RtspRequestWriter,
+  RtspResponseReader,
+  RtspResponseWriter,
+  RtspRequestReader,
+  Target,
+  AsClient,
+  AsServer,
+};
 pub use error::{
   Result,
   Error,
 };
 
 #[cfg(feature = "tokio-codec")]
-pub use codec::{
-  Codec,
-  Target,
-  AsClient,
-  AsServer,
-};
+pub use tokio::Codec;

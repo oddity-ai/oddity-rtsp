@@ -1,16 +1,16 @@
 use std::error::Error;
 use std::sync::{Arc, Mutex};
-use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::{TcpStream, Shutdown};
 
 use oddity_rtsp_protocol::{
+  RtspRequestReader,
+  RtspResponseWriter,
   Request,
   Response,
   ResponseMaybeInterleaved,
   Status,
-  Codec,
-  AsServer,
   Method,
+  Error as RtspError,
 };
 
 use concurrency::{
@@ -26,10 +26,9 @@ use super::media;
 type MediaController = Arc<Mutex<media::Controller>>;
 
 pub struct Connection {
-  //tx: Sender<ResponseMaybeInterleaved>, TODO
   shutdown_handle: net::ShutdownHandle,
-  reader: BufReader<TcpStream>,
-  writer: BufWriter<TcpStream>,
+  reader: RtspRequestReader<TcpStream>,
+  writer: RtspResponseWriter<TcpStream>,
   media: MediaController,
   stop_rx: StopRx,
 }
@@ -59,11 +58,45 @@ impl Connection {
 
     let reader_service = Service::spawn({
       let reader = self.reader;
+      let media = self.media.clone();
+      let writer_tx = writer_tx.clone();
       // Note: Don't need to use `_stop_rx` since we're using the
       // socket shutdown handle to signal cancellation to the I/O
       // reader and writer services.
       move |_stop_rx| {
-        /* TODO create some kind of reader that wraps TcpStream and does its thing */
+        loop {
+          match reader.read() {
+            Ok(request) => {
+              match handle_request(
+                &request,
+                media.clone(),
+              ) {
+                Ok(response) => {
+                  if let Err(_) = writer_tx.send(
+                    ResponseMaybeInterleaved::Message(response)
+                  ) {
+                    tracing::error!("writer channel failed unexpectedly");
+                    break;
+                  }
+                },
+                Err(err) => {
+                  tracing::error!(
+                    %err, %request,
+                    "failed to handle request"
+                  );
+                }
+              }
+            },
+            Err(RtspError::Shutdown) => {
+              tracing::trace!("connection reader stopping");
+              break;
+            },
+            Err(err) => {
+              tracing::error!(%err, "read failed");
+              break;
+            },
+          }
+        }
       }
     });
     
@@ -72,9 +105,12 @@ impl Connection {
       move |stop_rx| {
         loop {
           channel::select! {
-            recv(writer_rx) -> msg => {
-              if let Ok(msg) = msg {
-                // TODO writer write everything
+            recv(writer_rx) -> response => {
+              if let Ok(response) = response {
+                if let Err(err) = writer.write(response) {
+                  tracing::error!(%err, "write failed");
+                  break;
+                }
               } else {
                 tracing::error!("writer channel failed unexpectedly");
                 break;
@@ -90,35 +126,13 @@ impl Connection {
     });
     
     self.stop_rx.wait();
-    if let Ok(()) = self.shutdown_handle.shutdown(Shutdown::Both) {
-      // Stop and wait for reader/writer to join.
-      drop(reader_service);
-      drop(writer_service);
-    } else {
+    if let Err(_) = self.shutdown_handle.shutdown(Shutdown::Both) {
       tracing::warn!("failed to shutdown socket");
     }
+    
+    // Dropping reader and writer services will automatically join.
   }
     
-    
-    /*
-
-    let mut framed = Codec::<AsServer>::new().framed(socket);
-    while let Some(Ok(request)) = framed.next().await {
-      tracing::trace!(%request, "C->S");
-      match handle_request(&request, media.clone()).await {
-        Ok(response) => {
-          tracing::trace!(%response, "S->C");
-          if let Err(err) = framed.send(response).await {
-            tracing::error!(%err, "error trying to send response");
-          }
-        },
-        Err(err) => {
-          tracing::error!(%err, "error handling request");
-        },
-      }
-    }
-    */
-
 }
 
 

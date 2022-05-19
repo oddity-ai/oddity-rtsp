@@ -133,6 +133,9 @@ pub enum Error {
   /// Interleaved payload too large. The size cannot be larger than
   /// the maximum value of a 16-bit unsigned integer.
   InterleavedPayloadTooLarge,
+  /// Underlying socket was shut down. This is not really an error and
+  /// consumers are expected to handle it gracefully.
+  Shutdown,
   /// I/O error occurred.
   Io(io::Error),
 }
@@ -197,6 +200,8 @@ impl fmt::Display for Error {
         write!(f, "transport port malformed: {}", &value),
       Error::InterleavedPayloadTooLarge =>
         write!(f, "interleaved payload too large"),
+      Error::Shutdown =>
+        write!(f, "underlying socket was shut down"),
       Error::Io(err) =>
         write!(f, "{}", err),
     }

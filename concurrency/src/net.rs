@@ -1,16 +1,16 @@
 use std::net::{TcpStream, Shutdown};
-use std::io::{BufReader, BufWriter, Error};
+use std::io::Error;
 
-pub fn split(
+pub fn split<R, W>(
   stream: TcpStream,
-) -> (
-  BufReader<TcpStream>,
-  BufWriter<TcpStream>,
-  ShutdownHandle,
-) {
+) -> (R, W, ShutdownHandle)
+where
+  R: From<TcpStream>,
+  W: From<TcpStream>,
+{
   (
-    BufReader::new(stream.try_clone().unwrap()),
-    BufWriter::new(stream.try_clone().unwrap()),
+    stream.try_clone().unwrap().into(),
+    stream.try_clone().unwrap().into(),
     ShutdownHandle(stream),
   )
 }
