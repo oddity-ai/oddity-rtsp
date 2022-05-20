@@ -7,9 +7,9 @@ use concurrency::{
   StopRx,
 };
 
-use super::conn::WriterRx;
+use super::WriterRx;
 
-pub fn writer_loop(
+pub fn run_loop(
   writer: RtspResponseWriter<TcpStream>,
   writer_rx: WriterRx,
   stop_rx: StopRx,

@@ -2,22 +2,25 @@ use std::fmt;
 
 use rand::Rng;
 
+use concurrency::{
+  Service,
+  StopRx,
+};
+
 use super::{
   Source,
   SourceRx,
 };
 
-use crate::worker::{Worker, Stopper};
-
 pub struct Session {
-  worker: Option<Worker>,
+  service: Option<Service>,
   source_rx: SourceRx,
 }
 
 impl Session {
 
   pub fn new(source: &mut Source) -> Self {
-    let worker = Worker::new({
+    let service = Service::spawn({
       let source_rx = source.subscribe();
       move |stop| {
         Self::run(
@@ -28,7 +31,7 @@ impl Session {
     });
 
     Self {
-      worker: Some(worker),
+      service: Some(service),
       source_rx: source.subscribe(),
     }
   }
@@ -45,7 +48,7 @@ impl Session {
   fn run(
     // TODO target
     source_rx: SourceRx,
-    stop: Stopper,
+    stop: StopRx,
   ) {
     
   }

@@ -8,16 +8,17 @@ use std::sync::{Arc, Mutex};
 use concurrency::ServicePool;
 
 use super::{
-  media,
-  connection::Connection,
+  media::{
+    MediaController,
+    SharedMediaController
+  },
+  conn::Connection,
 };
 
-// TODO duplicate
-type MediaController = Arc<Mutex<media::Controller>>;
 
 pub struct Server<A: ToSocketAddrs + 'static> {
   addrs: A,
-  media: MediaController,
+  media: SharedMediaController,
   connections: ServicePool,
 }
 
@@ -25,7 +26,7 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
 
   pub fn new(
     addrs: A,
-    media: media::Controller,
+    media: MediaController,
   ) -> Self {
     Self {
       addrs,

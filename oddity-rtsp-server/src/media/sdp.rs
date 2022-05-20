@@ -33,7 +33,6 @@ pub fn create(
 ) -> Result<Sdp, Error> {
   const ORIGIN_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
   const TARGET_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
-  const TARGET_DUMMY_URL: &str = "rtp://0.0.0.0";
   const TARGET_DUMMY_PORT: u16 = 0;
 
   let reader = Reader::new(&descriptor.clone().into())
@@ -48,7 +47,7 @@ pub fn create(
       => TimeRange::Live,
   };
 
-  let muxer = RtpMuxer::new(TARGET_DUMMY_URL.parse().unwrap())
+  let muxer = RtpMuxer::new()
     .and_then(|muxer|
       muxer.with_stream(reader.stream_info(best_video_stream)?))
     .map_err(Error::Media)?;

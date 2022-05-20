@@ -7,9 +7,10 @@ use oddity_rtsp_protocol::{
   Status,
 };
 
-use crate::media;
-
-use super::conn::MediaController;
+use crate::media::{
+  SharedMediaController,
+  RegisterSessionError,
+};
 
 /*
 TODO
@@ -25,7 +26,7 @@ How to open RTP muxer and specify the port:
 #[tracing::instrument(skip(media))]
 pub fn handle_request(
   request: &Request,
-  media: MediaController,
+  media: SharedMediaController,
 ) -> Result<Response, Box<dyn Error + Send>> {
   // Shorthand for unlocking the media controller.
   macro_rules! media {
@@ -78,12 +79,12 @@ pub fn handle_request(
               //      correct RTP/RTCP client and server port tuples.
               unimplemented!()
             },
-            Err(media::RegisterSessionError::NotFound) => {
+            Err(RegisterSessionError::NotFound) => {
               reply_not_found(request)
             },
             // In the highly unlikely case that the randomly generated session was already
             // in use before.
-            Err(media::RegisterSessionError::AlreadyExists) => {
+            Err(RegisterSessionError::AlreadyExists) => {
               tracing::error!(
                 %request,
                 "session id already present (collision)");

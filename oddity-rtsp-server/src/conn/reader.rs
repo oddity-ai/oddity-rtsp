@@ -6,17 +6,16 @@ use oddity_rtsp_protocol::{
   Error as RtspError,
 };
 
+use crate::media::SharedMediaController;
+
 use super::{
-  conn::{
-    MediaController,
-    WriterTx,
-  },
+  WriterTx,
   handle::handle_request,
 };
 
-pub fn reader_loop(
+pub fn run_loop(
   reader: RtspRequestReader<TcpStream>,
-  media: MediaController,
+  media: SharedMediaController,
   writer_tx: WriterTx,
 ) {
   loop {

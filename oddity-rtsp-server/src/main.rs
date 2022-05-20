@@ -8,7 +8,7 @@ use std::env::args;
 use std::path::Path;
 
 use server::Server;
-use media::{Controller as MediaController, Descriptor};
+use media::{MediaController, Descriptor};
 use settings::{Settings, MediaKind};
 
 fn main() {

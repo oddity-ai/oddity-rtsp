@@ -4,10 +4,6 @@ use oddity_rtsp_protocol::{
   Lower,
 };
 
-// TODO turns out ffmpeg cannot natively mux RTP/AVP/TCP so we need to
-// do some custom stuff (writing to buffer I think), ffserver does it like so:
-// https://github.com/Malinskiy/ffmpeg/blob/master/ffserver.c
-
 pub struct Connect {
   socket: Socket,
   transport: Transport,

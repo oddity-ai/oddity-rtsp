@@ -1,29 +1,26 @@
-mod msg;
+use std::fmt;
 
-use std::sync::Arc;
+use concurrency::{
+  Service,
+  Broadcaster,
+  StopRx,
+};
 
 use oddity_video::{
   Reader,
+  Packet,
   StreamInfo,
 };
 
 use super::{
-  Descriptor,
   sdp::create as create_sdp,
-  super::{
-    worker::{
-      Worker,
-      Stopper,
-    },
-  },
+  Descriptor,
   Error,
   VideoError,
 };
 
-use comm::Communication;
-
-pub use comm::Rx;
-pub use msg::Message;
+/// Receiver channel type for source-produced messages.
+pub type Rx = concurrency::channel::Receiver<Message>;
 
 /// Media source that produces media packets when active. The source
 /// can produce packets and send them to one or more subscribers. This
@@ -38,16 +35,17 @@ pub use msg::Message;
 pub struct Source {
   /// Describes the underlying media item.
   descriptor: Descriptor,
-  /// Contains a handle to the worker thread and a origin subscriber
-  /// from which new subscribers can be created. If the worker is not
-  /// active, it is `None`.
-  worker: Option<Worker>,
-  /// Contains underlying communications handling for worker and the
-  /// subscribers to this source.
-  comms: Communication,
+  /// Contains a handle to the worker service. If the worker loop is
+  /// not active, it is `None`.
+  service: Option<Service>,
+  /// Contains underlying broadcaster handling message produced by the
+  /// service and broadcasting them to subscribers.
+  tx: Broadcaster<Message>,
 }
 
 impl Source {
+  /// Subscriber max backlog size before it fails.
+  const TX_CAP: usize = 1024;
 
   /// Create a new source.
   /// 
@@ -57,8 +55,8 @@ impl Source {
   pub fn new(descriptor: &Descriptor) -> Self {
     Self {
       descriptor: descriptor.clone(),
-      worker: None,
-      comms: Communication::new(),
+      service: None,
+      tx: Broadcaster::new(Self::TX_CAP),
     }
   }
 
@@ -82,29 +80,29 @@ impl Source {
   /// Retrieve a `Rx` through which the receiver can fetch media control
   /// packets such as re-initialization or media objects.
   pub fn subscribe(&mut self) -> Rx {
-    let receiver = match self.worker.as_ref() {
-      // If the worker is already active for this source and producing
+    let receiver = match self.service.as_ref() {
+      // If the service is already active for this source and producing
       // packets just return another receiver end for the source producer.
       Some(_) => {
-        self.comms.subscribe()
+        self.tx.subscribe()
       },
-      // If the worker is inactive (because there are no subscribers until
+      // If the service is inactive (because there are no subscribers until
       // now), start the work internally and acquire a subscriber to it.
       None => {
-        let rx = self.comms.subscribe();
-        let worker = Worker::new({
+        let rx = self.tx.subscribe();
+        let service = Service::spawn({
           let descriptor = self.descriptor.clone();
-          let comms = self.comms.clone();
+          let tx = self.tx.clone();
           move |stop| {
             Self::run(
               descriptor,
-              comms,
+              tx,
               stop,
             )
           }
         });
 
-        self.worker = Some(worker);
+        self.service = Some(service);
         rx
       }
     };
@@ -114,23 +112,25 @@ impl Source {
 
   /// Unsubscribe from the source.
   pub fn unsubscribe(&mut self, rx: Rx) {
-    self.comms.unsubscribe(rx);
+    // Dropping the rx will cause it to become invalid.
+    drop(rx);
 
-    // If there's no receivers left, then we can stop the worker
+    // If there's no receivers left, then we can stop the service
     // thread since it is not necessary anymore. It will be restarted
     // the next time there's a subscription.
-    if self.comms.num_subscribers() <= 0 {
-      if let Some(worker) = self.worker.take() {
-        worker.stop(false);
+    if self.tx.num() <= 0 {
+      if let Some(service) = self.service.take() {
+        // Dropping the service will cause it to stop.
+        drop(service);
       }
     }
   }
 
-  /// Internal worker function that performs the actual reading process.
+  /// Internal service function that performs the actual reading process.
   fn run(
     descriptor: Descriptor,
-    mut comms: Communication,
-    mut stop: Stopper,
+    mut tx: Broadcaster<Message>,
+    mut stop: StopRx,
   ) {
     fn retry_timeout() {
       // TODO
@@ -142,7 +142,7 @@ impl Source {
         Ok(reader) => {
           match fetch_stream_info(&reader) {
             Ok((stream_id, stream_info)) => {
-              comms.broadcast(Message::Init(stream_info));
+              tx.broadcast(Message::Init(stream_info));
               (reader, stream_id)
             },
             Err(err) => {
@@ -168,7 +168,7 @@ impl Source {
       while !stop.should() {
         match reader.read(stream_id) {
           Ok(packet) => {
-            comms.broadcast(Message::Packet(packet));
+            tx.broadcast(Message::Packet(packet));
           },
           Err(err) => {
             tracing::error!(
@@ -195,4 +195,24 @@ fn fetch_stream_info(
     stream_index,
     reader.stream_info(stream_index)?,
   ))
+}
+
+/// Message sent between producer service and subscribers.
+#[derive(Clone)]
+pub enum Message {
+  /// Subscriber should reinitialize stream with the given properties.
+  Init(StreamInfo),
+  /// Subscriber should handle media packet.
+  Packet(Packet),
+}
+
+impl fmt::Display for Message {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Message::Init(_) => write!(f, "init"),
+      Message::Packet(_) => write!(f, "packet"),
+    }
+  }
+
 }

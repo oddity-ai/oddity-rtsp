@@ -6,10 +6,13 @@ mod sdp;
 mod error;
 
 pub use controller::{
-  Controller,
+  Controller as MediaController,
   RegisterSessionError,
 };
-pub use source::Source;
+pub use source::{
+  Source,
+  Rx as SourceRx,
+};
 pub use session::{
   SessionId,
   Session,
@@ -19,3 +22,6 @@ pub use error::{
   Error,
   VideoError,
 };
+
+pub type SharedMediaController =
+  std::sync::Arc<std::sync::Mutex<MediaController>>;
