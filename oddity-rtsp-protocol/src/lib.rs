@@ -48,6 +48,7 @@ pub use io::{
   AsClient,
   AsServer,
 };
+pub use serialize::Serialize;
 pub use error::{
   Result,
   Error,

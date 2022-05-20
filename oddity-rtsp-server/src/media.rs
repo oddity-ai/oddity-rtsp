@@ -12,6 +12,7 @@ pub use controller::{
 pub use source::{
   Source,
   Rx as SourceRx,
+  Message as SourceMsg,
 };
 pub use session::{
   SessionId,
