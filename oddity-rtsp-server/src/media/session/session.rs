@@ -1,6 +1,3 @@
-mod id;
-mod context;
-
 use std::net::UdpSocket;
 
 use concurrency::{
@@ -15,20 +12,18 @@ use oddity_video::{
   RtpBuf,
 };
 
-use super::media::{
+use crate::media::source::{
   Source,
-  SourceRx,
-  SourceMsg,
+  Rx as SourceRx,
+  Msg as SourceMsg,
 };
 
-use context::{
+use super::context::{
   Context,
   Destination,
   UdpDestination,
   TcpInterleavedDestination,
 };
-
-pub use id::SessionId;
 
 pub struct Session {
   service: Option<Service>,

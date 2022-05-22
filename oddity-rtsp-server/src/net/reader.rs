@@ -9,7 +9,7 @@ use oddity_rtsp_protocol::{
 use crate::media::SharedMediaController;
 
 use super::{
-  WriterTx,
+  writer::WriterTx,
   handle::handle_request,
 };
 

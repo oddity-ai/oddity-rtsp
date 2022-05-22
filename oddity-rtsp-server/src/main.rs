@@ -1,14 +1,11 @@
-mod server;
-mod conn;
+mod net;
 mod media;
 mod settings;
-mod transport;
-mod session;
 
 use std::env::args;
 use std::path::Path;
 
-use server::Server;
+use net::Server;
 use media::{MediaController, Descriptor};
 use settings::{Settings, MediaKind};
 

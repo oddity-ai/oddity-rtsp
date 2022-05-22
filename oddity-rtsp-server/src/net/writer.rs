@@ -7,7 +7,8 @@ use concurrency::{
   StopRx,
 };
 
-use super::WriterRx;
+pub type WriterRx = concurrency::channel::Receiver<oddity_rtsp_protocol::ResponseMaybeInterleaved>;
+pub type WriterTx = concurrency::channel::Sender<oddity_rtsp_protocol::ResponseMaybeInterleaved>;
 
 pub fn run_loop(
   writer: RtspResponseWriter<TcpStream>,

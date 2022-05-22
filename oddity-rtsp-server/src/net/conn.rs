@@ -1,8 +1,3 @@
-mod handle;
-mod reader;
-mod writer;
-
-use std::sync::{Arc, Mutex};
 use std::net::{TcpStream, Shutdown};
 
 use oddity_rtsp_protocol::{
@@ -20,8 +15,10 @@ use concurrency::{
 
 use crate::media::SharedMediaController;
 
-pub type WriterRx = channel::Receiver<ResponseMaybeInterleaved>;
-pub type WriterTx = channel::Sender<ResponseMaybeInterleaved>;
+use super::{
+  reader,
+  writer,
+};
 
 pub struct Connection {
   shutdown_handle: net::ShutdownHandle,

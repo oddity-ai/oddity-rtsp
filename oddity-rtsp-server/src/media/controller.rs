@@ -4,10 +4,12 @@ use std::fmt;
 
 use super::{
   Descriptor,
-  Source,
+  source::Source,
+  session::{
+    Session,
+    SessionId,
+  },
 };
-
-use crate::session::{Session, SessionId};
 
 pub struct Controller {
   sources: HashMap<String, Source>,

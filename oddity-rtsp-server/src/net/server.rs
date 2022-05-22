@@ -7,14 +7,12 @@ use std::sync::{Arc, Mutex};
 
 use concurrency::ServicePool;
 
-use super::{
-  media::{
-    MediaController,
-    SharedMediaController
-  },
-  conn::Connection,
+use crate::media::{
+  MediaController,
+  SharedMediaController,
 };
 
+use super::conn::Connection;
 
 pub struct Server<A: ToSocketAddrs + 'static> {
   addrs: A,
