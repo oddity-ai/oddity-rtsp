@@ -4,11 +4,6 @@ use oddity_rtsp_protocol::{
   Lower,
 };
 
-pub struct Connect {
-  socket: Socket,
-  transport: Transport,
-}
-
 pub fn determine_transport(
   constraints: impl IntoIterator<Item=Transport>,
 ) -> Option<Transport> {

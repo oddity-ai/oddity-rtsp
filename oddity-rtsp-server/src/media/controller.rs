@@ -5,9 +5,9 @@ use std::fmt;
 use super::{
   Descriptor,
   Source,
-  SessionId,
-  Session,
 };
+
+use crate::session::{Session, SessionId};
 
 pub struct Controller {
   sources: HashMap<String, Source>,

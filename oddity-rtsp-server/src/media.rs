@@ -1,5 +1,4 @@
 mod source;
-mod session;
 mod controller;
 mod descriptor;
 mod sdp;
@@ -13,10 +12,6 @@ pub use source::{
   Source,
   Rx as SourceRx,
   Message as SourceMsg,
-};
-pub use session::{
-  SessionId,
-  Session,
 };
 pub use descriptor::Descriptor;
 pub use error::{

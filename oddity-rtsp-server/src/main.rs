@@ -3,6 +3,7 @@ mod conn;
 mod media;
 mod settings;
 mod transport;
+mod session;
 
 use std::env::args;
 use std::path::Path;
