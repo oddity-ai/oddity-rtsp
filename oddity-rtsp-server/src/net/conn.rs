@@ -51,7 +51,7 @@ impl Connection {
     let (writer_tx, writer_rx) =
       channel::default::<ResponseMaybeInterleaved>();
 
-    let reader_service = Service::spawn({
+    let _reader_service = Service::spawn({
       let reader = self.reader;
       let media = self.media.clone();
       let writer_tx = writer_tx.clone();
@@ -65,7 +65,7 @@ impl Connection {
       )
     });
     
-    let writer_service = Service::spawn({
+    let _writer_service = Service::spawn({
       let writer = self.writer;
       move |stop_rx| writer::run_loop(
         writer,

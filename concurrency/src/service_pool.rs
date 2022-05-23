@@ -68,7 +68,7 @@ impl ServicePool {
 impl Drop for ServicePool {
 
   fn drop(&mut self) {
-    self.stop_tx.broadcast(());
+    let _ = self.stop_tx.broadcast(());
     self
       .handles
       .lock()

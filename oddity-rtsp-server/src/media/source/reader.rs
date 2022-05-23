@@ -1,5 +1,6 @@
 use concurrency::{
   Broadcaster,
+  BroadcastError,
   StopRx,
 };
 
@@ -34,7 +35,7 @@ pub fn run(
       Ok(reader) => {
         match fetch_stream_info(&reader) {
           Ok((stream_id, stream_info)) => {
-            tx.broadcast(Msg::Init(stream_info));
+            let _ = tx.broadcast(Msg::Init(stream_info));
             (reader, stream_id)
           },
           Err(err) => {
@@ -60,7 +61,13 @@ pub fn run(
     while !stop.should() {
       match reader.read(stream_id) {
         Ok(packet) => {
-          tx.broadcast(Msg::Packet(packet));
+          // If there's no receivers left, then we can stop the loop
+          // since it is not necessary anymore. It will be restarted
+          // the next time there's a subscription.
+          if let Err(BroadcastError::NoSubscribers) =
+              tx.broadcast(Msg::Packet(packet)) {
+            break 'outer;
+          }
         },
         Err(err) => {
           tracing::error!(

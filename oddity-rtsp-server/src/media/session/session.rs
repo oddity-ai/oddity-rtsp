@@ -82,11 +82,6 @@ impl Session {
     dest: UdpDestination,
     stop: StopRx,
   ) {
-    // TODO
-    // !!! How to handle `server_port` pair, do we need to receive data there and if so, what
-    //  do we do with it ??!?!?!
-    // okay i think we can get 'm like this: https://www.ffmpeg.org/doxygen/3.4/rtpproto_8h.html
-
     let socket_rtp = match UdpSocket::bind("0.0.0.0:0") {
       Ok(socket) => socket,
       Err(err) => {
@@ -102,6 +97,9 @@ impl Session {
         return;
       },
     };
+
+    // TODO setup muxer with stream info, but how to get it once the source
+    //  already started much earlier?
 
     loop {
       let msg = source_rx.recv();
@@ -152,6 +150,9 @@ impl Session {
     dest: TcpInterleavedDestination,
     stop: StopRx,
   ) {
+    // TODO setup muxer with stream info, but how to get it once the source
+    //  already started much earlier?
+
     loop {
       let msg = source_rx.recv();
       if let Ok(msg) = msg {
@@ -188,6 +189,7 @@ impl Session {
         // TODO
       }
       /*
+      TODO
       channel::select! {
         recv(source_rx) -> msg => {
         },

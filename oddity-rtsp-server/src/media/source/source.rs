@@ -78,12 +78,12 @@ impl Source {
     let receiver = match self.service.as_ref() {
       // If the service is already active for this source and producing
       // packets just return another receiver end for the source producer.
-      Some(_) => {
+      Some(service) if service.is_running() => {
         self.tx.subscribe()
       },
       // If the service is inactive (because there are no subscribers until
       // now), start the work internally and acquire a subscriber to it.
-      None => {
+      _ => {
         let rx = self.tx.subscribe();
         let service = Service::spawn({
           let descriptor = self.descriptor.clone();
@@ -103,22 +103,6 @@ impl Source {
     };
 
     receiver
-  }
-
-  /// Unsubscribe from the source.
-  pub fn unsubscribe(&mut self, rx: Rx) {
-    // Dropping the rx will cause it to become invalid.
-    drop(rx);
-
-    // If there's no receivers left, then we can stop the service
-    // thread since it is not necessary anymore. It will be restarted
-    // the next time there's a subscription.
-    if self.tx.num() <= 0 {
-      if let Some(service) = self.service.take() {
-        // Dropping the service will cause it to stop.
-        drop(service);
-      }
-    }
   }
 
 }

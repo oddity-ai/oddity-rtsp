@@ -9,4 +9,4 @@ pub mod channel;
 pub use service::Service;
 pub use service_pool::ServicePool;
 pub use stop::StopRx;
-pub use broadcast::Broadcaster;
+pub use broadcast::{Broadcaster, Error as BroadcastError};

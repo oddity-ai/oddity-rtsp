@@ -48,9 +48,9 @@ pub fn make_context_from_transport(
 
 fn resolve_transport(
   transport: &Transport,
-  rtp_muxer: &RtpMuxer,
+  muxer: &RtpMuxer,
 ) -> Transport {
-  let (rtp_port, rtcp_port) = rtp_muxer.local_ports();
+  let (rtp_port, rtcp_port) = muxer.local_ports();
 
   transport
     .clone()

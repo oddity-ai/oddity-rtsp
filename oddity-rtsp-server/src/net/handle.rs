@@ -86,9 +86,9 @@ pub fn handle_request(
 
       let transport = match request.transport() {
         Ok(transport) => transport,
-        Err(err) => {
-          // If the client did not provide a transport header value, then there is no way
-          // to reach it and we return "Unsupported Transport".
+        Err(_) => {
+          // If the client did not provide a valid transport header value, then there
+          // no way to reach it and we return "Unsupported Transport".
           return reply_unsupported_transport(request);
         }
       };
@@ -98,7 +98,7 @@ pub fn handle_request(
         writer_tx,
       ) {
         Ok(session_context) => session_context,
-        Err(err) => {
+        Err(_) => {
           // If we cannot create a session from the given transport parameters, then this
           // usually means that the client provided an invalid or unsupported `Transport`
           // header parameterization.
