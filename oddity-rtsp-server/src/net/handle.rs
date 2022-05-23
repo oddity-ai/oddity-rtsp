@@ -1,5 +1,3 @@
-use std::error::Error;
-
 use oddity_rtsp_protocol::{
   Request,
   Response,
@@ -7,13 +5,15 @@ use oddity_rtsp_protocol::{
   Status,
 };
 
-use crate::media::{
-  SharedMediaController,
-  RegisterSessionError,
-  session::{
-    Session,
-    SessionContext,
-    make_session_context_from_transport,
+use crate::{
+  net::WriterTx,
+  media::{
+    SharedMediaController,
+    RegisterSessionError,
+    session::{
+      SessionId,
+      make_session_context_from_transport,
+    },
   },
 };
 
@@ -32,6 +32,7 @@ How to open RTP muxer and specify the port:
 pub fn handle_request(
   request: &Request,
   media: SharedMediaController,
+  writer_tx: WriterTx,
 ) -> Response {
   // Shorthand for unlocking the media controller.
   macro_rules! media {
@@ -83,31 +84,34 @@ pub fn handle_request(
         return reply_aggregate_operation_not_allowed(request);
       }
 
-      let transport =
-        match request.transport() {
-          Ok(transport) => transport,
-          Err(err) => {
-            // TODO
-            return;
-          }
-        };
+      let transport = match request.transport() {
+        Ok(transport) => transport,
+        Err(err) => {
+          // If the client did not provide a transport header value, then there is no way
+          // to reach it and we return "Unsupported Transport".
+          return reply_unsupported_transport(request);
+        }
+      };
 
-      let session_context =
-        match make_session_context_from_transport(transport, writer_tx) {
-          Ok(session_context) => session_context,
-          Err(err) => {
-            // TODO handle some specifically (!)
-            return;
-          }
-        };
+      let session_context = match make_session_context_from_transport(
+        transport,
+        writer_tx,
+      ) {
+        Ok(session_context) => session_context,
+        Err(err) => {
+          // If we cannot create a session from the given transport parameters, then this
+          // usually means that the client provided an invalid or unsupported `Transport`
+          // header parameterization.
+          return reply_unsupported_transport(request);
+        }
+      };
 
       match media!().register_session(request.path(), session_context) {
-        Ok(session) => {
-          // TODO Parse permissable Transport header and generate a workable Transport header
-          //      from our side. This requires setting up the stream most likely to generate
-          //      correct RTP/RTCP client and server port tuples.
-          unimplemented!()
+        // Session was successfully registered!
+        Ok(session_id) => {
+          reply_to_setup_with_session_id(request, &session_id)
         },
+        // Path not found, source does not exist.
         Err(RegisterSessionError::NotFound) => {
           reply_not_found(request)
         },
@@ -178,6 +182,17 @@ fn reply_to_describe_with_media_sdp(
   Response::ok()
     .with_cseq_of(request)
     .with_sdp(sdp_contents)
+    .build()
+}
+
+#[inline]
+fn reply_to_setup_with_session_id(
+  request: &Request,
+  session_id: &SessionId,
+) -> Response {
+  Response::ok()
+    .with_cseq_of(request)
+    .with_header("Session", session_id)
     .build()
 }
 
@@ -254,6 +269,18 @@ fn reply_aggregate_operation_not_allowed(
     %request,
     "refusing to do aggregate request");
   Response::error(Status::AggregateOperationNotAllowed)
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_unsupported_transport(
+  request: &Request,
+) -> Response {
+  tracing::debug!(
+    %request,
+    "unsupported transport");
+  Response::error(Status::UnsupportedTransport)
     .with_cseq_of(request)
     .build()
 }

@@ -14,31 +14,25 @@ use super::{
 };
 
 pub fn run_loop(
-  reader: RtspRequestReader<TcpStream>,
+  mut reader: RtspRequestReader<TcpStream>,
   media: SharedMediaController,
   writer_tx: WriterTx,
 ) {
   loop {
     match reader.read() {
       Ok(request) => {
-        match handle_request(
+        let response = handle_request(
           &request,
           media.clone(),
+          // TODO handle disconnection with teardown (?)
+          writer_tx.clone(),
+        );
+
+        if let Err(_) = writer_tx.send(
+          ResponseMaybeInterleaved::Message(response)
         ) {
-          Ok(response) => {
-            if let Err(_) = writer_tx.send(
-              ResponseMaybeInterleaved::Message(response)
-            ) {
-              tracing::error!("writer channel failed unexpectedly");
-              break;
-            }
-          },
-          Err(err) => {
-            tracing::error!(
-              %err, %request,
-              "failed to handle request"
-            );
-          }
+          tracing::error!("writer channel failed unexpectedly");
+          break;
         }
       },
       Err(RtspError::Shutdown) => {
