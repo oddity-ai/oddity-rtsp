@@ -38,23 +38,24 @@ impl<A: ToSocketAddrs + 'static> Server<A> {
   }
 
   pub fn run(
-    self
+    mut self
   ) -> Result<(), Box<dyn Error>> {
     let listener = TcpListener::bind(&self.addrs)?;
     loop {
       let (socket, addr) = listener.accept()?;
       tracing::trace!(%addr, "accepted client");
 
-      self.connections.spawn(
+      self.connections.spawn({
+        let media = self.media.clone();
         move |stop_rx| {
           Connection::new(
               socket,
-              &self.media,
+              &media,
               stop_rx,
             )
             .run();
         }
-      );
+      });
     }
   }
 

@@ -11,10 +11,11 @@ pub type WriterRx = concurrency::channel::Receiver<oddity_rtsp_protocol::Respons
 pub type WriterTx = concurrency::channel::Sender<oddity_rtsp_protocol::ResponseMaybeInterleaved>;
 
 pub fn run_loop(
-  writer: RtspResponseWriter<TcpStream>,
+  mut writer: RtspResponseWriter<TcpStream>,
   writer_rx: WriterRx,
   stop_rx: StopRx,
 ) {
+  let stop_rx = stop_rx.into_rx();
   loop {
     channel::select! {
       recv(writer_rx) -> response => {
@@ -28,7 +29,7 @@ pub fn run_loop(
           break;
         }
       },
-      recv(stop_rx.into_rx()) -> _ => {
+      recv(stop_rx) -> _ => {
         tracing::trace!("connection writer stopping");
         break;
       },

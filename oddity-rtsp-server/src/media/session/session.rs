@@ -75,9 +75,10 @@ impl Session {
     
   }
 
+  // TODO refactor
   fn run_udp(
     source_rx: SourceRx,
-    muxer: RtpMuxer,
+    mut muxer: RtpMuxer,
     dest: UdpDestination,
     stop: StopRx,
   ) {
@@ -144,9 +145,10 @@ impl Session {
     }
   }
 
+  // TODO refactor
   fn run_tcp_interleaved(
     source_rx: SourceRx,
-    muxer: RtpMuxer,
+    mut muxer: RtpMuxer,
     dest: TcpInterleavedDestination,
     stop: StopRx,
   ) {

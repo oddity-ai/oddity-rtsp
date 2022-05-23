@@ -25,31 +25,25 @@ pub fn make_context_from_transport(
   candidate_transports: impl IntoIterator<Item=Transport>,
   writer_tx: WriterTx,
 ) -> Result<Context, Error> {
-  candidate_transports
+  let transport = candidate_transports
     .into_iter()
-    .filter_map(|transport| {
-      if is_supported(&transport) {
-        Some(
-          RtpMuxer::new()
-            .map_err(Error::Media)
-            .and_then(|muxer| {
-              let transport = resolve_transport(&transport, &muxer);
-              let dest = resolve_destination(&transport, writer_tx)
-                .ok_or_else(|| Error::DestinationInvalid)?;
-
-              Ok(Context {
-                muxer,
-                transport,
-                dest,
-              })
-            })
-        )
-      } else {
-        None
-      }
-    })
+    .filter(|transport| is_supported(&transport))
     .next()
-    .unwrap_or_else(|| Err(Error::TransportNotSupported))
+    .ok_or_else(|| Error::TransportNotSupported)?;
+  
+  RtpMuxer::new()
+    .map_err(Error::Media)
+    .and_then(|muxer| {
+      let transport = resolve_transport(&transport, &muxer);
+      let dest = resolve_destination(&transport, writer_tx)
+        .ok_or_else(|| Error::DestinationInvalid)?;
+
+      Ok(Context {
+        muxer,
+        transport,
+        dest,
+      })
+    })
 }
 
 fn resolve_transport(
