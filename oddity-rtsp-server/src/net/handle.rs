@@ -10,6 +10,11 @@ use oddity_rtsp_protocol::{
 use crate::media::{
   SharedMediaController,
   RegisterSessionError,
+  session::{
+    Session,
+    SessionContext,
+    make_session_context_from_transport,
+  },
 };
 
 /*
@@ -27,7 +32,7 @@ How to open RTP muxer and specify the port:
 pub fn handle_request(
   request: &Request,
   media: SharedMediaController,
-) -> Result<Response, Box<dyn Error + Send>> {
+) -> Response {
   // Shorthand for unlocking the media controller.
   macro_rules! media {
     () => { media.lock().unwrap() };
@@ -36,89 +41,105 @@ pub fn handle_request(
   // Check the Require header and make sure all requested options are
   // supported or return response with 551 Option Not Supported.
   if !is_request_require_supported(request) {
-    return Ok(reply_option_not_supported(request));
+    return reply_option_not_supported(request);
   }
 
-  Ok(
-    match request.method {
-      /* Stateless */
-      Method::Options => {
-        reply_to_options_with_supported_methods(request)
-      },
-      Method::Announce => {
-        reply_method_not_supported(request)
-      },
-      Method::Describe => {
-        if is_request_one_of_content_types_supported(request) {
-          if let Some(media_sdp) = media!().query_sdp(request.path()) {
-            reply_to_describe_with_media_sdp(request, media_sdp.clone())
-          } else {
-            reply_not_found(request)
-          }
+  match request.method {
+    /* Stateless */
+    Method::Options => {
+      reply_to_options_with_supported_methods(request)
+    },
+    Method::Announce => {
+      reply_method_not_supported(request)
+    },
+    Method::Describe => {
+      if is_request_one_of_content_types_supported(request) {
+        if let Some(media_sdp) = media!().query_sdp(request.path()) {
+          reply_to_describe_with_media_sdp(request, media_sdp.clone())
         } else {
-          tracing::warn!(
+          reply_not_found(request)
+        }
+      } else {
+        tracing::warn!(
+          %request,
+          "none of content types accepted by client are supported, \
+            server only supports `application/sdp`");
+        reply_not_acceptable(request)
+      }
+    },
+    Method::GetParameter => {
+      reply_method_not_supported(request)
+    },
+    Method::SetParameter => {
+      reply_method_not_supported(request)
+    },
+    /* Stateful */
+    Method::Setup => {
+      if request.session().is_some() {
+        // RFC specification allows negatively responding to SETUP request with Session
+        // IDs by responding with 459 Aggregate Operation Not Allowed. By handling this
+        // here we don't have to deal with clients trying to change transport parameters
+        // on media items that are already playing.
+        return reply_aggregate_operation_not_allowed(request);
+      }
+
+      let transport =
+        match request.transport() {
+          Ok(transport) => transport,
+          Err(err) => {
+            // TODO
+            return;
+          }
+        };
+
+      let session_context =
+        match make_session_context_from_transport(transport, writer_tx) {
+          Ok(session_context) => session_context,
+          Err(err) => {
+            // TODO handle some specifically (!)
+            return;
+          }
+        };
+
+      match media!().register_session(request.path(), session_context) {
+        Ok(session) => {
+          // TODO Parse permissable Transport header and generate a workable Transport header
+          //      from our side. This requires setting up the stream most likely to generate
+          //      correct RTP/RTCP client and server port tuples.
+          unimplemented!()
+        },
+        Err(RegisterSessionError::NotFound) => {
+          reply_not_found(request)
+        },
+        // In the highly unlikely case that the randomly generated session was already
+        // in use before.
+        Err(RegisterSessionError::AlreadyExists) => {
+          tracing::error!(
             %request,
-            "none of content types accepted by client are supported, \
-             server only supports `application/sdp`");
-          reply_not_acceptable(request)
-        }
-      },
-      Method::GetParameter => {
-        reply_method_not_supported(request)
-      },
-      Method::SetParameter => {
-        reply_method_not_supported(request)
-      },
-      /* Stateful */
-      Method::Setup => {
-        if request.session().is_none() {
-          match media!().register_session(request.path()) {
-            Ok(session) => {
-              // TODO Parse permissable Transport header and generate a workable Transport header
-              //      from our side. This requires setting up the stream most likely to generate
-              //      correct RTP/RTCP client and server port tuples.
-              unimplemented!()
-            },
-            Err(RegisterSessionError::NotFound) => {
-              reply_not_found(request)
-            },
-            // In the highly unlikely case that the randomly generated session was already
-            // in use before.
-            Err(RegisterSessionError::AlreadyExists) => {
-              tracing::error!(
-                %request,
-                "session id already present (collision)");
-              reply_internal_server_error(request)
-            },
-          }
-        } else {
-          // RFC specification allows negatively responding to SETUP request with Session
-          // IDs by responding with 459 Aggregate Operation Not Allowed. By handling this
-          // here we don't have to deal with clients trying to change transport parameters
-          // on media items that are already playing.
-          reply_aggregate_operation_not_allowed(request)
-        }
-      },
-      Method::Play => {
-        unimplemented!();
-      },
-      Method::Pause => {
-        reply_method_not_supported(request)
-      },
-      Method::Record => {
-        reply_method_not_supported(request)
-      },
-      Method::Teardown => {
-        unimplemented!();
-      },
-      /* Invalid */
-      // Request with method REDIRECT can only be sent from server to
-      // client, not the other way around.
-      Method::Redirect => {
-        reply_method_not_valid(request)
-      },
-    }
-  )
+            "session id already present (collision)");
+          reply_internal_server_error(request)
+        },
+      }
+    },
+    Method::Play => {
+      unimplemented!();
+    },
+    Method::Pause => {
+      reply_method_not_supported(request)
+    },
+    Method::Record => {
+      reply_method_not_supported(request)
+    },
+    Method::Teardown => {
+      unimplemented!();
+    },
+    /* Invalid */
+    // Request with method REDIRECT can only be sent from server to
+    // client, not the other way around.
+    Method::Redirect => {
+      reply_method_not_valid(request)
+    },
+  }
 }
 
 #[inline]

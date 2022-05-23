@@ -1,11 +1,14 @@
 use std::net::SocketAddr;
 
+use oddity_rtsp_protocol::Transport;
+
 use oddity_video::RtpMuxer;
 
 use crate::net::WriterTx;
 
 pub struct Context {
   pub muxer: RtpMuxer,
+  pub transport: Transport,
   pub dest: Destination,
 }
 

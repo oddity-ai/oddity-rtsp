@@ -8,6 +8,7 @@ use super::{
   session::{
     Session,
     SessionId,
+    SessionContext,
   },
 };
 
@@ -62,12 +63,19 @@ impl Controller {
   pub fn register_session(
     &mut self,
     path: &str,
+    session_context: SessionContext,
   ) -> Result<SessionId, RegisterSessionError> {
     if let Some(source) = self.sources.get_mut(normalize_url_path(path)) {
       let session_id = SessionId::generate();
       if let Entry::Vacant(entry) = self.sessions.entry(session_id.clone()) {
-        let session = Session::new(source);
-        entry.insert(Mutex::new(session));
+        entry.insert(
+          Mutex::new(
+            Session::new(
+              source,
+              session_context,
+            )
+          )
+        );
         Ok(session_id)
       } else {
         Err(RegisterSessionError::AlreadyExists)

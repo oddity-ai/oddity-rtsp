@@ -58,6 +58,71 @@ impl Transport {
     self.parameters.iter()
   }
 
+  pub fn destination(&self) -> Option<&IpAddr> {
+    self
+      .parameters_iter()
+      .filter_map(|parameter| {
+        if let Parameter::Destination(ip_addr) = parameter {
+          Some(ip_addr)
+        } else {
+          None
+        }
+      })
+      .next()
+  }
+
+  pub fn port(&self) -> Option<&Port> {
+    self
+      .parameters_iter()
+      .filter_map(|parameter| {
+        if let Parameter::Port(port) = parameter {
+          Some(port)
+        } else {
+          None
+        }
+      })
+      .next()
+  }
+
+  pub fn client_port(&self) -> Option<&Port> {
+    self
+      .parameters_iter()
+      .filter_map(|parameter| {
+        if let Parameter::ClientPort(port) = parameter {
+          Some(port)
+        } else {
+          None
+        }
+      })
+      .next()
+  }
+
+  pub fn server_port(&self) -> Option<&Port> {
+    self
+      .parameters_iter()
+      .filter_map(|parameter| {
+        if let Parameter::ServerPort(port) = parameter {
+          Some(port)
+        } else {
+          None
+        }
+      })
+      .next()
+  }
+
+  pub fn interleaved_channel(&self) -> Option<&Channel> {
+    self
+      .parameters_iter()
+      .filter_map(|parameter| {
+        if let Parameter::Interleaved(channel) = parameter {
+          Some(channel)
+        } else {
+          None
+        }
+      })
+      .next()
+  }
+
 }
 
 impl fmt::Display for Transport {
@@ -313,8 +378,8 @@ impl FromStr for Parameter {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Channel {
-  Single(u16),
-  Range(u16, u16),
+  Single(u8),
+  Range(u8, u8),
 }
 
 impl fmt::Display for Channel {
@@ -339,12 +404,12 @@ impl FromStr for Channel {
     let mut parts = s.split("-");
     let channel_1 = parts
       .next()
-      .and_then(|channel| channel.parse::<u16>().ok())
+      .and_then(|channel| channel.parse::<u8>().ok())
       .ok_or_else(|| Error::TransportChannelMalformed { value: s.to_string(), })?;
     let channel_2 = parts
       .next()
       .map(|channel| channel
-        .parse::<u16>()
+        .parse::<u8>()
         .map_err(|_| Error::TransportChannelMalformed { value: s.to_string(), })
       );
 
@@ -646,7 +711,7 @@ mod tests {
         .with_parameter(Parameter::Unicast)
         .with_parameter(Parameter::Multicast)
         .with_parameter(Parameter::Destination([1, 2, 3, 4].into()))
-        .with_parameter(Parameter::Interleaved(Channel::Range(1234, 1235)))
+        .with_parameter(Parameter::Interleaved(Channel::Range(12, 13)))
         .with_parameter(Parameter::Append)
         .with_parameter(Parameter::Ttl(999))
         .with_parameter(Parameter::Layers(2))

@@ -1,28 +1,117 @@
 use oddity_rtsp_protocol::{
   Transport,
   Parameter,
+  Port,
+  Channel,
   Lower,
+  Method,
 };
 
-pub fn determine_transport(
-  constraints: impl IntoIterator<Item=Transport>,
-) -> Option<Transport> {
-  constraints
+use oddity_video::RtpMuxer;
+
+use crate::{
+  net::WriterTx,
+  media::Error,
+};
+
+use super::context::{
+  Context,
+  Destination,
+  UdpDestination,
+  TcpInterleavedDestination,
+};
+
+pub fn make_context_from_transport(
+  candidate_transports: impl IntoIterator<Item=Transport>,
+  writer_tx: WriterTx,
+) -> Result<Context, Error> {
+  candidate_transports
     .into_iter()
-    .filter_map(|constraint| {
-      if is_supported(&constraint) {
+    .filter_map(|transport| {
+      if is_supported(&transport) {
         Some(
-          
+          RtpMuxer::new()
+            .map_err(Error::Media)
+            .and_then(|muxer| {
+              let transport = resolve_transport(&transport, &muxer);
+              let dest = resolve_destination(&transport, writer_tx)
+                .ok_or_else(|| Error::DestinationInvalid)?;
+
+              Ok(Context {
+                muxer,
+                transport,
+                dest,
+              })
+            })
         )
       } else {
         None
       }
     })
     .next()
+    .unwrap_or_else(|| Err(Error::TransportNotSupported))
 }
 
-fn resolve() -> Transport {
-  
+fn resolve_transport(
+  transport: &Transport,
+  rtp_muxer: &RtpMuxer,
+) -> Transport {
+  let (rtp_port, rtcp_port) = rtp_muxer.local_ports();
+
+  transport
+    .clone()
+    .with_parameter(
+      Parameter::ServerPort(
+        Port::Range(
+          rtp_port,
+          rtcp_port,
+        )
+      )
+    )
+}
+
+fn resolve_destination(
+  transport: &Transport,
+  writer_tx: WriterTx,
+) -> Option<Destination> {
+  Some(
+    match transport.lower_protocol()? {
+      Lower::Udp => {
+        let client_ip_addr = transport.destination()?;
+        let (client_rtp_port, client_rtcp_port) =
+          match transport.client_port()? {
+            Port::Single(rtp_port)
+              => (*rtp_port, rtp_port + 1),
+            Port::Range(rtp_port, rtcp_port)
+              => (*rtp_port, *rtcp_port),
+          };
+
+        Destination::Udp(
+          UdpDestination {
+            rtp_remote: (*client_ip_addr, client_rtp_port).into(),
+            rtcp_remote: (*client_ip_addr, client_rtcp_port).into(),
+          }
+        )
+      },
+      Lower::Tcp => {
+        let (rtp_channel, rtcp_channel) =
+          match transport.interleaved_channel()? {
+            Channel::Single(rtp_channel)
+              => (*rtp_channel, rtp_channel + 1),
+            Channel::Range(rtp_channel, rtcp_channel)
+              => (*rtp_channel, *rtcp_channel),
+          };
+
+        Destination::TcpInterleaved(
+          TcpInterleavedDestination {
+            rtp_channel,
+            rtcp_channel,
+            tx: writer_tx,
+          }
+        )
+      },
+    }
+  )
 }
 
 fn is_supported(
@@ -50,18 +139,28 @@ fn is_lower_protocol_supported(
 fn is_parameter_supported(
   parameter: &Parameter,
 ) -> bool {
+  /*
+    Supported parameters are:
+    - `unicast`
+    - `destination`
+    - `interleaved`
+    - `ttl`
+    - `client_port`
+    - `mode` (if value is "PLAY")
+  */
   match parameter {
-    Parameter::Unicast        => true,
-    Parameter::Multicast      => false,
-    Parameter::Destination(_) => true,
-    Parameter::Interleaved(_) => false,
-    Parameter::Append         => false,
-    Parameter::Ttl(_)         => true,
-    Parameter::Layers(_)      => false,
-    Parameter::Port(_)        => true,
-    Parameter::ClientPort(_)  => true,
-    Parameter::ServerPort(_)  => false,
-    Parameter::Ssrc(_)        => false,
-    Parameter::Mode(_)        => false,
+    Parameter::Unicast            => true,
+    Parameter::Multicast          => false, // Multicast not supported
+    Parameter::Destination(_)     => true,
+    Parameter::Interleaved(_)     => true,
+    Parameter::Append             => false, // RECORD not supported
+    Parameter::Ttl(_)             => true,
+    Parameter::Layers(_)          => false, // Multicast not supported
+    Parameter::Port(_)            => false, // Multicast not supported
+    Parameter::ClientPort(_)      => true,
+    Parameter::ServerPort(_)      => false, // Client cannot choose server ports
+    Parameter::Ssrc(_)            => false, // Client cannot choose ssrc
+    Parameter::Mode(Method::Play) => true,
+    Parameter::Mode(_)            => false, // Only PLAY is supported for session.
   }
 }
