@@ -7,6 +7,7 @@ use concurrency::{
 use oddity_video::{
   Reader,
   StreamInfo,
+  Packet,
 };
 
 use crate::media::{
@@ -14,71 +15,70 @@ use crate::media::{
   VideoError,
 };
 
-use super::msg::Msg;
-
 /// Receiver channel type for source-produced messages.
-pub type Rx = concurrency::channel::Receiver<Msg>;
+pub type Rx = concurrency::channel::Receiver<Packet>;
 
 /// Internal service function that performs the actual reading process.
 pub fn run(
-  descriptor: Descriptor,
-  mut tx: Broadcaster<Msg>,
+  reader: Reader,
+  mut tx: Broadcaster<Packet>,
   mut stop: StopRx,
 ) {
   fn retry_timeout() {
     // TODO
   }
 
-  'outer:
   while !stop.should() {
-    let (mut reader, stream_id) = match Reader::new(&descriptor.clone().into()) {
-      Ok(reader) => {
-        match fetch_stream_info(&reader) {
-          Ok((stream_id, stream_info)) => {
-            let _ = tx.broadcast(Msg::Init(stream_info));
-            (reader, stream_id)
-          },
-          Err(err) => {
-            tracing::error!(
-              %descriptor, %err,
-              "failed to fetch stream information"
-            );
-            retry_timeout();
-            continue 'outer;
-          },
+    match reader.read(stream_id) {
+      Ok(packet) => {
+        // If there's no receivers left, then we can stop the loop
+        // since it is not necessary anymore. It will be restarted
+        // the next time there's a subscription.
+        if let Err(BroadcastError::NoSubscribers) =
+            tx.broadcast(packet) {
+          break;
         }
       },
       Err(err) => {
         tracing::error!(
           %descriptor, %err,
-          "failed to open media"
+          "reading from video stream failed",
         );
         retry_timeout();
-        continue 'outer;
+        continue;
       },
     };
 
-    while !stop.should() {
-      match reader.read(stream_id) {
-        Ok(packet) => {
-          // If there's no receivers left, then we can stop the loop
-          // since it is not necessary anymore. It will be restarted
-          // the next time there's a subscription.
-          if let Err(BroadcastError::NoSubscribers) =
-              tx.broadcast(Msg::Packet(packet)) {
-            break 'outer;
-          }
+    // TODO handle reset of input stream!
+  }
+}
+
+pub fn initialize(
+  descriptor: &Descriptor,
+) -> Result<(Reader, StreamInfo)> {
+  match Reader::new(&descriptor.clone().into()) {
+    Ok(reader) => {
+      match fetch_stream_info(&reader) {
+        // TODO
+        Ok((stream_id, stream_info)) => {
+          Ok((reader, stream_id))
         },
         Err(err) => {
           tracing::error!(
             %descriptor, %err,
-            "reading from video stream failed",
+            "failed to fetch stream information"
           );
-          retry_timeout();
-          continue 'outer;
+          Err(err)
         },
-      };
-    }
+      }
+    },
+    Err(err) => {
+      tracing::error!(
+        %descriptor, %err,
+        "failed to open media"
+      );
+      Err(err)
+    },
   }
 }
 
@@ -87,7 +87,6 @@ fn fetch_stream_info(
   reader: &Reader,
 ) -> Result<(usize, StreamInfo), VideoError> {
   let stream_index = reader.best_video_stream_index()?;
-
   Ok((
     stream_index,
     reader.stream_info(stream_index)?,

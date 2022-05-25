@@ -37,7 +37,7 @@ impl Session {
     context: Context,
   ) -> Self {
     let service = Service::spawn({
-      let source_rx = source.subscribe();
+      let (source_stream_info, source_rx) = source.subscribe();
       move |stop| {
         match context.dest {
           Destination::Udp(dest) => {
