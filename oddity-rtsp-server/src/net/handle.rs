@@ -111,6 +111,10 @@ pub fn handle_request(
         Ok(session_id) => {
           reply_to_setup_with_session_id(request, &session_id)
         },
+        // Failed to read media source.
+        Err(RegisterSessionError::MediaInvalid) => {
+          reply_internal_server_error(request)
+        },
         // Path not found, source does not exist.
         Err(RegisterSessionError::NotFound) => {
           reply_not_found(request)

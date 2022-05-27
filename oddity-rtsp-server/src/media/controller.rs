@@ -70,10 +70,8 @@ impl Controller {
       if let Entry::Vacant(entry) = self.sessions.entry(session_id.clone()) {
         entry.insert(
           Mutex::new(
-            Session::new(
-              source,
-              session_context,
-            )
+            Session::new(source, session_context)
+              .map_err(|_| RegisterSessionError::MediaInvalid)?
           )
         );
         Ok(session_id)
@@ -121,6 +119,7 @@ impl fmt::Display for Controller {
 pub enum RegisterSessionError {
   NotFound,
   AlreadyExists,
+  MediaInvalid,
 }
 
 fn normalize_url_path(path: &str) -> &str {

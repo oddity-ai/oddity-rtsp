@@ -20,7 +20,8 @@ pub type Rx = concurrency::channel::Receiver<Packet>;
 
 /// Internal service function that performs the actual reading process.
 pub fn run(
-  reader: Reader,
+  descriptor: Descriptor,
+  mut reader: Reader,
   mut tx: Broadcaster<Packet>,
   mut stop: StopRx,
 ) {
@@ -28,8 +29,21 @@ pub fn run(
     // TODO
   }
 
+  let stream_info = match fetch_stream_info(&reader) {
+    Ok(stream_info) => {
+      stream_info
+    },
+    Err(err) => {
+      tracing::error!(
+        %descriptor, %err,
+        "failed to fetch stream information"
+      );
+      return;
+    },
+  };
+
   while !stop.should() {
-    match reader.read(stream_id) {
+    match reader.read(stream_info.index) {
       Ok(packet) => {
         // If there's no receivers left, then we can stop the loop
         // since it is not necessary anymore. It will be restarted
@@ -53,15 +67,15 @@ pub fn run(
   }
 }
 
+/// Helper function to initialize a reader and produce stream information.
 pub fn initialize(
   descriptor: &Descriptor,
-) -> Result<(Reader, StreamInfo)> {
+) -> Result<(Reader, StreamInfo), VideoError> {
   match Reader::new(&descriptor.clone().into()) {
     Ok(reader) => {
       match fetch_stream_info(&reader) {
-        // TODO
-        Ok((stream_id, stream_info)) => {
-          Ok((reader, stream_id))
+        Ok(stream_info) => {
+          Ok((reader, stream_info))
         },
         Err(err) => {
           tracing::error!(
@@ -85,10 +99,7 @@ pub fn initialize(
 /// Helper function for acquiring stream information.
 fn fetch_stream_info(
   reader: &Reader,
-) -> Result<(usize, StreamInfo), VideoError> {
+) -> Result<StreamInfo, VideoError> {
   let stream_index = reader.best_video_stream_index()?;
-  Ok((
-    stream_index,
-    reader.stream_info(stream_index)?,
-  ))
+  reader.stream_info(stream_index)
 }

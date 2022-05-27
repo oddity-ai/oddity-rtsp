@@ -12,10 +12,12 @@ use oddity_video::{
   RtpBuf,
 };
 
-use crate::media::source::{
-  Source,
-  Rx as SourceRx,
-  Msg as SourceMsg,
+use crate::media::{
+  source::{
+    Source,
+    Rx as SourceRx,
+  },
+  Error,
 };
 
 use super::context::{
@@ -27,7 +29,6 @@ use super::context::{
 
 pub struct Session {
   service: Option<Service>,
-  source_rx: SourceRx,
 }
 
 impl Session {
@@ -35,9 +36,9 @@ impl Session {
   pub fn new(
     source: &mut Source,
     context: Context,
-  ) -> Self {
+  ) -> Result<Self, Error> {
     let service = Service::spawn({
-      let (source_stream_info, source_rx) = source.subscribe();
+      let (source_rx, source_stream_info) = source.subscribe()?;
       move |stop| {
         match context.dest {
           Destination::Udp(dest) => {
@@ -60,10 +61,11 @@ impl Session {
       }
     });
 
-    Self {
-      service: Some(service),
-      source_rx: source.subscribe(),
-    }
+    Ok(
+      Self {
+        service: Some(service),
+      }
+    )
   }
 
   pub fn play() {
@@ -102,28 +104,20 @@ impl Session {
     //  already started much earlier?
 
     loop {
-      let msg = source_rx.recv();
-      if let Ok(msg) = msg {
-        match msg {
-          SourceMsg::Init(stream_info) => {
-            // TODO
-          },
-          SourceMsg::Packet(packet) => {
-            match muxer.mux(packet) {
-              Ok(output) => {
-                match output {
-                  RtpBuf::Rtp(buf) => {
-                    socket_rtp.send_to(&buf, dest.rtp_remote).unwrap(); // TODO
-                  },
-                  RtpBuf::Rtcp(buf) => {
-                    socket_rtp.send_to(&buf, dest.rtcp_remote).unwrap(); // TODO
-                  }
-                }
+      let packet = source_rx.recv();
+      if let Ok(packet) = packet {
+        match muxer.mux(packet) {
+          Ok(output) => {
+            match output {
+              RtpBuf::Rtp(buf) => {
+                socket_rtp.send_to(&buf, dest.rtp_remote).unwrap(); // TODO
               },
-              Err(err) => {
-                // TODO
-              },
+              RtpBuf::Rtcp(buf) => {
+                socket_rtp.send_to(&buf, dest.rtcp_remote).unwrap(); // TODO
+              }
             }
+          },
+          Err(err) => {
             // TODO
           },
         };
@@ -154,35 +148,28 @@ impl Session {
     //  already started much earlier?
 
     loop {
-      let msg = source_rx.recv();
-      if let Ok(msg) = msg {
-        match msg {
-          SourceMsg::Init(stream_info) => {
-            // TODO
-          },
-          SourceMsg::Packet(packet) => {
-            match muxer.mux(packet) {
-              Ok(output) => {
-                let response_interleaved_message = match output {
-                  RtpBuf::Rtp(buf) => {
-                    ResponseMaybeInterleaved::Interleaved {
-                      channel: dest.rtp_channel,
-                      payload: buf.into(),
-                    }
-                  },
-                  RtpBuf::Rtcp(buf) => {
-                    ResponseMaybeInterleaved::Interleaved {
-                      channel: dest.rtcp_channel,
-                      payload: buf.into(),
-                    }
-                  },
-                };
-                dest.tx.send(response_interleaved_message).unwrap(); // TODO error handling
+      let packet = source_rx.recv();
+      if let Ok(packet) = packet {
+        match muxer.mux(packet) {
+          Ok(output) => {
+            let response_interleaved_message = match output {
+              RtpBuf::Rtp(buf) => {
+                ResponseMaybeInterleaved::Interleaved {
+                  channel: dest.rtp_channel,
+                  payload: buf.into(),
+                }
               },
-              Err(err) => {
-                // TODO
+              RtpBuf::Rtcp(buf) => {
+                ResponseMaybeInterleaved::Interleaved {
+                  channel: dest.rtcp_channel,
+                  payload: buf.into(),
+                }
               },
             };
+            dest.tx.send(response_interleaved_message).unwrap(); // TODO error handling
+          },
+          Err(err) => {
+            // TODO
           },
         };
       } else {
