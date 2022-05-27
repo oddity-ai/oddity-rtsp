@@ -1,12 +1,16 @@
 use oddity_video::{
+  Reader,
   StreamInfo,
   Packet,
 };
+
+use crate::link::Receiver;
 
 use crate::media::{
   sdp::create as create_sdp,
   Descriptor,
   Error,
+  VideoError,
 };
 
 use super::{
@@ -16,10 +20,88 @@ use super::{
   },
 };
 
+pub enum Msg {
+  StreamInfo,
+}
+
+pub enum Reply {
+  StreamInfo(StreamInfo),
+}
+
+pub async fn run(
+  descriptor: Descriptor,
+  link: Receiver<(), StreamInfo>,
+  stop: Receiver<(), ()>,
+  tx: Broadcast,
+) {
+  // TODO
+  let (reader, _) = reader::initialize(&descriptor).unwrap();
+
+  let stream_info = match fetch_stream_info(&reader) {
+    Ok(stream_info) => {
+      stream_info
+    },
+    Err(err) => {
+      tracing::error!(
+        %descriptor, %err,
+        "failed to fetch stream information"
+      );
+      return;
+    },
+  };
+
+  loop {
+    tokio::select! {
+      packet = tokio::task::spawn_blocking(move || reader.read(stream_info.index)) => {
+
+      },
+      _ = link.recv() => {
+        link.reply(stream_info); // TODO error handling
+      },
+      _ = stop.recv() => {
+        stop.reply(());
+        break;
+      },
+    }
+  }
+
+  while !stop.should() {
+    match reader.read(stream_info.index) {
+      Ok(packet) => {
+        // If there's no receivers left, then we can stop the loop
+        // since it is not necessary anymore. It will be restarted
+        // the next time there's a subscription.
+        if let Err(BroadcastError::NoSubscribers) =
+            tx.broadcast(packet) {
+          break;
+        }
+      },
+      Err(err) => {
+        tracing::error!(
+          %descriptor, %err,
+          "reading from video stream failed",
+        );
+        retry_timeout();
+        continue;
+      },
+    };
+
+    // TODO handle reset of input stream!
+  }
+}
+
+/// Helper function for acquiring stream information.
+fn fetch_stream_info(
+  reader: &Reader,
+) -> Result<StreamInfo, VideoError> {
+  let stream_index = reader.best_video_stream_index()?;
+  reader.stream_info(stream_index)
+}
+
 pub struct Source {
   descriptor: Descriptor,
-  reader: Option<(Service, StreamInfo)>,
-  tx: Broadcaster<Packet>,
+  //reader: Option<(Service, StreamInfo)>,
+  reader: tokio::task::JoinHandle<()>,
 }
 
 impl Source {

@@ -1,46 +1,58 @@
 use tokio::sync::mpsc;
 
-// TODO Tx rename
-// TODO Rx rename
-pub struct Sender<Tx, Rx> {
-  tx: mpsc::Sender<Tx>,
-  rx: mpsc::Receiver<Rx>,
+pub struct Sender<I, O> {
+  tx: mpsc::UnboundedSender<O>,
+  rx: mpsc::UnboundedReceiver<I>,
 }
 
-impl<Tx, Rx> Sender<Tx, Rx> {
+impl<I, O> Sender<I, O> {
 
   pub async fn command(
     &mut self,
-    command: Tx,
-  ) -> Option<Rx> {
-    let _ = self.tx.send(command).await; // TODO
+    command: O,
+  ) -> Option<I> {
+    let _ = self.tx.send(command); // TODO handle err
     self.rx.recv().await
   }
 
 }
 
-pub struct Receiver<Tx, Rx> {
-  tx: mpsc::Sender<Tx>,
-  rx: mpsc::Receiver<Rx>,
+pub struct Receiver<I, O> {
+  tx: mpsc::UnboundedSender<O>,
+  rx: mpsc::UnboundedReceiver<I>,
 }
 
-impl<Tx, Rx> Receiver<Tx, Rx> {
+impl<I, O> Receiver<I, O> {
 
   pub async fn recv(
     &mut self,
-  ) -> Option<Rx> {
+  ) -> Option<I> {
     self.rx.recv().await
   }
 
-  pub async fn reply(
+  pub fn reply(
     &mut self,
-    reply: Tx,
+    reply: O,
   ) {
-    self.tx.send(reply).await; // TODO handling
+    self.tx.send(reply); // TODO handle err
   }
 
 }
 
-pub async fn create<Command, Reply>() -> (Sender<Command, Reply>, Receiver<Reply, Command>) {
-
+pub async fn create<Command, Reply>() -> (
+  Sender<Command, Reply>,
+  Receiver<Reply, Command>,
+) {
+  let (tx_cmd, rx_cmd) = mpsc::unbounded_channel();
+  let (tx_rpl, rx_rpl) = mpsc::unbounded_channel();
+  (
+    Sender {
+      tx: tx_cmd, 
+      rx: rx_rpl,
+    },
+    Receiver {
+      tx: tx_rpl,
+      rx: rx_cmd,
+    },
+  )
 }
