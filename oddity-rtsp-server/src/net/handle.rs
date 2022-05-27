@@ -55,6 +55,8 @@ pub fn handle_request(
     },
     Method::Describe => {
       if is_request_one_of_content_types_supported(request) {
+        // TODO this will return 404 when the destination stream is actually
+        // not readable...
         if let Some(media_sdp) = media!().query_sdp(request.path()) {
           reply_to_describe_with_media_sdp(request, media_sdp.clone())
         } else {

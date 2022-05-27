@@ -51,6 +51,10 @@ impl Connection {
     let (writer_tx, writer_rx) =
       channel::default::<ResponseMaybeInterleaved>();
 
+    // TODO `Connection` does not self cleanup because it only stops
+    // waiting for `stop_rx` even though it should also react to the
+    // socket dying...
+
     let _reader_service = Service::spawn({
       let reader = self.reader;
       let media = self.media.clone();
@@ -79,6 +83,7 @@ impl Connection {
       tracing::warn!("failed to shutdown socket");
     }
     
+    tracing::trace!("connection stopping");
     // Dropping reader and writer services will automatically join.
   }
     
