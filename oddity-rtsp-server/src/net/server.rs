@@ -5,8 +5,6 @@ use std::net::{
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 
-use concurrency::ServicePool;
-
 use crate::media::{
   MediaController,
   SharedMediaController,

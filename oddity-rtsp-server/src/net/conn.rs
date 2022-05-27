@@ -6,13 +6,6 @@ use oddity_rtsp_protocol::{
   ResponseMaybeInterleaved,
 };
 
-use concurrency::{
-  Service,
-  StopRx,
-  net,
-  channel,
-};
-
 use crate::media::SharedMediaController;
 
 use super::{

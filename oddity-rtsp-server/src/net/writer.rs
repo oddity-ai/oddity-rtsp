@@ -1,14 +1,6 @@
 use std::net::TcpStream;
 
 use oddity_rtsp_protocol::RtspResponseWriter;
-use concurrency::{
-
-  channel,
-  StopRx,
-};
-
-pub type WriterRx = concurrency::channel::Receiver<oddity_rtsp_protocol::ResponseMaybeInterleaved>;
-pub type WriterTx = concurrency::channel::Sender<oddity_rtsp_protocol::ResponseMaybeInterleaved>;
 
 pub fn run_loop(
   mut writer: RtspResponseWriter<TcpStream>,
