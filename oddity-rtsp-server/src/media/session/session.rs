@@ -10,6 +10,7 @@ use oddity_rtsp_protocol::ResponseMaybeInterleaved;
 use oddity_video::{
   RtpMuxer,
   RtpBuf,
+  StreamInfo,
 };
 
 use crate::media::{
@@ -43,6 +44,7 @@ impl Session {
         match context.dest {
           Destination::Udp(dest) => {
             Self::run_udp(
+              source_stream_info,
               source_rx,
               context.muxer,
               dest,
@@ -51,6 +53,7 @@ impl Session {
           },
           Destination::TcpInterleaved(dest) => {
             Self::run_tcp_interleaved(
+              source_stream_info,
               source_rx,
               context.muxer,
               dest,
@@ -79,6 +82,7 @@ impl Session {
 
   // TODO refactor
   fn run_udp(
+    stream_info: StreamInfo,
     source_rx: SourceRx,
     mut muxer: RtpMuxer,
     dest: UdpDestination,
@@ -139,13 +143,22 @@ impl Session {
 
   // TODO refactor
   fn run_tcp_interleaved(
+    stream_info: StreamInfo,
     source_rx: SourceRx,
-    mut muxer: RtpMuxer,
+    muxer: RtpMuxer,
     dest: TcpInterleavedDestination,
     stop: StopRx,
   ) {
     // TODO setup muxer with stream info, but how to get it once the source
     //  already started much earlier?
+    let mut muxer =
+      match muxer.with_stream(stream_info) {
+        Ok(muxer) => muxer,
+        Err(err) => {
+          // TODO
+          return;
+        },
+      };
 
     loop {
       let packet = source_rx.recv();
