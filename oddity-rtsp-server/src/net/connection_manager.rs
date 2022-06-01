@@ -28,7 +28,7 @@ pub struct ConnectionManager {
 
 impl ConnectionManager {
 
-  pub fn new(
+  pub async fn start(
     runtime: Arc<Runtime>,
   ) -> Self {
     let connections = Arc::new(Mutex::new(HashMap::new()));
@@ -41,9 +41,14 @@ impl ConnectionManager {
       .spawn({
         let connections = connections.clone();
         |task_context| {
-          Self::run(task_context, connections, connection_state_rx)
+          Self::run(
+            connections,
+            connection_state_rx,
+            task_context,
+          )
         }
-      });
+      })
+      .await;
 
     Self {
       connections,
@@ -51,6 +56,11 @@ impl ConnectionManager {
       connection_state_tx,
       runtime,
     }
+  }
+
+  pub async fn stop() {
+    // TODO see other comment in session teardown and implement graceful cleanup
+    // here as well throughout Session/SessionManager/Connection/ConnectionManager
   }
 
   pub async fn spawn(
@@ -69,9 +79,9 @@ impl ConnectionManager {
   }
 
   async fn run(
-    mut task_context: TaskContext,
     connections: ConnectionMap,
     mut connection_state_rx: ConnectionStateRx,
+    mut task_context: TaskContext,
   ) {
     loop {
       select! {

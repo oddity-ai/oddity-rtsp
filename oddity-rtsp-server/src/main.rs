@@ -1,5 +1,8 @@
 mod app;
 mod net;
+mod media;
+mod source;
+mod session;
 mod runtime;
 
 use app::App;

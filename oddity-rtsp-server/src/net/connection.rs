@@ -1,6 +1,5 @@
 use futures::SinkExt;
 use tokio::select;
-use tokio::sync::broadcast;
 use tokio::sync::mpsc;
 use tokio::net;
 use tokio_stream::StreamExt;
@@ -21,11 +20,11 @@ pub enum ConnectionState {
 pub type ConnectionStateTx = mpsc::UnboundedSender<ConnectionState>;
 pub type ConnectionStateRx = mpsc::UnboundedReceiver<ConnectionState>;
 
-type RtspResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
-type RtspResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
+pub type ResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
+pub type ResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
 pub struct Connection {
-  sender_tx: RtspResponseSenderTx,
+  sender_tx: ResponseSenderTx,
 }
 
 impl Connection {
@@ -48,14 +47,15 @@ impl Connection {
           sender_rx,
           task_context,
         )
-      );
+      )
+      .await;
 
     Connection {
       sender_tx,
     }
   }
 
-  pub fn sender_tx(&self) -> RtspResponseSenderTx {
+  pub fn sender_tx(&self) -> ResponseSenderTx {
     self.sender_tx.clone()
   }
 
@@ -63,7 +63,7 @@ impl Connection {
     id: ConnectionId,
     inner: net::TcpStream,
     state_tx: ConnectionStateTx,
-    mut response_rx: RtspResponseSenderRx,
+    mut response_rx: ResponseSenderRx,
     mut task_context: TaskContext,
   ) {
     let (read, write) = inner.into_split();
@@ -77,6 +77,9 @@ impl Connection {
             Some(packet) => {
               if let Err(err) = outbound.send(packet).await {
                 // TODO handle
+                // TODO this is a complicated piece of the puzzle because we need to figure
+                // out how connection communicates with the source and session manager with-
+                // out too much hackiness... channels????
               }
             },
             None => {

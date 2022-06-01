@@ -13,7 +13,7 @@ impl Server {
     runtime: Arc<Runtime>,
   ) -> Self {
     Self {
-      connection_manager: ConnectionManager::new(runtime.clone()),
+      connection_manager: ConnectionManager::start(runtime.clone()).await,
     }
   }
 
