@@ -1,8 +1,10 @@
 use std::future::Future;
 
-use tokio::spawn;
-use tokio::sync::broadcast;
+use tokio::select;
+use tokio::task;
+use tokio::sync::oneshot;
 use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 use tokio::sync::Mutex;
 
 pub struct TaskManager {
@@ -30,7 +32,7 @@ impl TaskManager {
   pub async fn spawn<F, T>(
     &self,
     f: F,
-  )
+  ) -> Task
   where
     F: FnOnce(TaskContext) -> T + Send + 'static,
     T: Future + Send + 'static,
@@ -41,14 +43,16 @@ impl TaskManager {
     // another task already asked the manager to stop, in
     // which case we ignore the request and don't start a
     // task at all.
-    if let Some(hold_tx) = self
+    if let Some(hold_all_tx) = self
         .hold_tx
         .lock()
         .await
         .as_ref()
         .map(|hold_tx| hold_tx.clone()) {
-      let stop_rx = self.stop_tx.subscribe();
-      let _ = spawn(
+      let (hold_tx, hold_rx) = oneshot::channel();
+      let (stop_tx, stop_rx) = mpsc::channel(1);
+      let stop_all_rx = self.stop_tx.subscribe();
+      let _ = task::spawn(
         async move {
           // Instantiate task context here. After the fut-
           // ure genrated by `f` has finished, it will be
@@ -56,12 +60,17 @@ impl TaskManager {
           // hold to be released as well.
           let task_context = TaskContext {
             _token: hold_tx,
+            _token_all: hold_all_tx,
             stop: stop_rx,
+            stop_all: stop_all_rx,
           };
 
           f(task_context).await;
         }
       );
+      Task::new(hold_rx, stop_tx)
+    } else {
+      Task::none()
     }
   }
 
@@ -88,15 +97,55 @@ impl TaskManager {
 
 }
 
+pub struct Task {
+  hold: Option<oneshot::Receiver<()>>,
+  stop: Option<mpsc::Sender<()>>,
+}
+
+impl Task {
+
+  pub fn new(
+    hold_rx: oneshot::Receiver<()>,
+    stop_tx: mpsc::Sender<()>,
+  ) -> Task {
+    Self {
+      hold: Some(hold_rx),
+      stop: Some(stop_tx),
+    }
+  }
+
+  pub fn none() -> Task {
+    Task {
+      hold: None,
+      stop: None,
+    }
+  }
+
+  pub async fn stop(&mut self) {
+    if let Some(stop) = self.stop.as_ref() {
+      let _ = stop.send(());
+    }
+    if let Some(hold) = self.hold.take() {
+      let _ = hold.await;
+    }
+  }
+
+}
+
 pub struct TaskContext {
-  stop: broadcast::Receiver<()>,
-  _token: mpsc::Sender<()>,
+  stop: mpsc::Receiver<()>,
+  stop_all: broadcast::Receiver<()>,
+  _token: oneshot::Sender<()>,
+  _token_all: mpsc::Sender<()>,
 }
 
 impl TaskContext {
 
   pub async fn wait_for_stop(&mut self) {
-    let _ = self.stop.recv().await;
+    select! {
+      _ = self.stop.recv() => {},
+      _ = self.stop_all.recv() => {},
+    };
   }
 
 }

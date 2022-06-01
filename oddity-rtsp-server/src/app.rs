@@ -8,34 +8,24 @@ use crate::source::source_manager::SourceManager;
 use crate::session::session_manager::SessionManager;
 
 pub struct App {
+  server: Server,
+  source_manager: SourceManager,
+  session_manager: SessionManager,
   runtime: Arc<Runtime>,
   state: Arc<Mutex<AppState>>,
 }
 
 impl App {
 
-  pub fn new() -> Self {
+  pub async fn start() -> App {
+    let runtime = Arc::new(Runtime::new());
     Self {
-      runtime: Arc::new(Runtime::new()),
-      state: Arc::new(Mutex::new(AppState::Initialized)),
+      server: Server::start(runtime.clone()).await,
+      source_manager: SourceManager::start(runtime.clone()).await,
+      session_manager: SessionManager::start(runtime.clone()).await,
+      runtime,
+      state: Arc::new(Mutex::new(AppState::Running)),
     }
-  }
-
-  pub async fn start(&mut self) {
-    match *self.state.lock().await {
-      AppState::Initialized => {
-        *self.state.lock().await = AppState::Running;
-        
-        // TODO
-      },
-      AppState::Running => {
-        panic!("app is already running");
-      },
-      AppState::Stopping |
-      AppState::Stopped => {
-        panic!("app is already stopped");
-      },
-    };
   }
 
   pub async fn stop(&mut self) {
@@ -45,9 +35,6 @@ impl App {
         self.runtime.stop().await;
         *self.state.lock().await = AppState::Stopped;
       },
-      AppState::Initialized => {
-        panic!("app was never started");
-      },
       AppState::Stopping |
       AppState::Stopped => {
         panic!("app is already stopped");
@@ -55,10 +42,14 @@ impl App {
     };
   }
 
+  pub async fn state(&self) -> AppState {
+    self.state.lock().await.clone()
+  }
+
 }
 
+#[derive(Clone)]
 pub enum AppState {
-  Initialized,
   Running,
   Stopping,
   Stopped,

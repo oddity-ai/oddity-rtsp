@@ -3,7 +3,7 @@ use tokio::sync::mpsc;
 use tokio::sync::broadcast;
 
 use crate::runtime::Runtime;
-use crate::runtime::task_manager::TaskContext;
+use crate::runtime::task_manager::{Task, TaskContext};
 use crate::media;
 
 pub enum SourceState {
@@ -31,6 +31,7 @@ pub struct Source {
   control_tx: SourceControlTx,
   media_info_tx: SourceMediaInfoTx,
   packet_tx: SourcePacketTx,
+  worker: Task,
 }
 
 impl Source {
@@ -41,10 +42,10 @@ impl Source {
     runtime: &Runtime,
   ) -> Self {
     let (control_tx, control_rx) = mpsc::unbounded_channel();
-    let (media_info_tx, media_info_rx) = broadcast::channel(16); // TODO magic constant
-    let (packet_tx, packet_rx) = broadcast::channel(1024); // TODO magic constant
+    let (media_info_tx, _) = broadcast::channel(16); // TODO magic constant
+    let (packet_tx, _) = broadcast::channel(1024); // TODO magic constant
 
-    runtime
+    let worker = runtime
       .task()
       .spawn({
         let media_info_tx = media_info_tx.clone();
@@ -66,7 +67,13 @@ impl Source {
       control_tx,
       media_info_tx,
       packet_tx,
+      worker,
     }
+  }
+
+  pub async fn stop(&mut self) {
+    let _ = self.control_tx.send(SourceControlMessage::Stop);
+    self.worker.stop().await;
   }
 
   // TODO STOPPING

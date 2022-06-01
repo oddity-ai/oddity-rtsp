@@ -8,7 +8,7 @@ use rand::Rng;
 use oddity_rtsp_protocol::Transport;
 
 use crate::runtime::Runtime;
-use crate::runtime::task_manager::TaskContext;
+use crate::runtime::task_manager::{Task, TaskContext};
 use crate::net::connection::{Connection, ResponseSenderTx};
 
 pub enum SessionState {
@@ -27,6 +27,7 @@ pub type SessionControlRx = mpsc::UnboundedReceiver<SessionControlMessage>;
 
 pub struct Session {
   control_tx: SessionControlTx,
+  worker: Task,
 }
 
 impl Session {
@@ -40,7 +41,7 @@ impl Session {
   ) -> Self {
     let (control_tx, control_rx) = mpsc::unbounded_channel();
 
-    runtime
+    let worker = runtime
       .task()
       .spawn(|task_context| {
         Self::run(
@@ -54,15 +55,16 @@ impl Session {
 
     Self {
       control_tx,
+      worker,
     }
   }
 
-  pub fn teardown(&self) {
-    // TODO: This function only REQUESTS teardown, but why not turn it into
-    // an async function that also joins on the task handle. This would require
-    // revising much of the cancellation structure (might not need Runtime AT ALL)
-    // but it does make sense. OR EVEN Use it in conjunction with!
+  pub async fn teardown(&mut self) {
+    // First send a `Teardown` message to allow the session to be
+    // tore down safely and resources be released.
     let _ = self.control_tx.send(SessionControlMessage::Teardown);
+    // Use `Task` mechanism to send stop signal and stop join task.
+    let _ = self.worker.stop().await;
   }
 
   pub fn control_tx(&self) -> SessionControlTx {

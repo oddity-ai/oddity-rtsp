@@ -10,7 +10,7 @@ use rand::random;
 use oddity_rtsp_protocol::{Codec, AsServer, ResponseMaybeInterleaved};
 
 use crate::runtime::Runtime;
-use crate::runtime::task_manager::TaskContext;
+use crate::runtime::task_manager::{Task, TaskContext};
 
 pub enum ConnectionState {
   Disconnected(ConnectionId),
@@ -25,6 +25,7 @@ pub type ResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
 pub struct Connection {
   sender_tx: ResponseSenderTx,
+  worker: Task,
 }
 
 impl Connection {
@@ -37,7 +38,7 @@ impl Connection {
   ) -> Self {
     let (sender_tx, sender_rx) = mpsc::unbounded_channel();
 
-    runtime
+    let worker = runtime
       .task()
       .spawn(
         move |task_context| Self::run(
@@ -52,7 +53,12 @@ impl Connection {
 
     Connection {
       sender_tx,
+      worker,
     }
+  }
+  
+  pub async fn close(&mut self) {
+    self.worker.stop().await
   }
 
   pub fn sender_tx(&self) -> ResponseSenderTx {

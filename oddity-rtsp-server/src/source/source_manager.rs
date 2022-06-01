@@ -6,7 +6,7 @@ use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
 use crate::runtime::Runtime;
-use crate::runtime::task_manager::TaskContext;
+use crate::runtime::task_manager::{Task, TaskContext};
 use crate::source::source::{
   Source,
   SourcePath,
@@ -20,19 +20,20 @@ type SourceMap = Arc<Mutex<HashMap<SourcePath, Source>>>;
 pub struct SourceManager {
   sources: SourceMap,
   source_state_tx: SourceStateTx,
+  worker: Task,
   runtime: Arc<Runtime>,
 }
 
 impl SourceManager {
 
-  pub async fn new(
+  pub async fn start(
     runtime: Arc<Runtime>,
   ) -> Self {
     let sources = Arc::new(Mutex::new(HashMap::new()));
     let (source_state_tx, source_state_rx) =
       mpsc::unbounded_channel();
 
-    runtime
+    let worker = runtime
       .task()
       .spawn({
         let sources = sources.clone();
@@ -49,7 +50,15 @@ impl SourceManager {
     Self {
       sources,
       source_state_tx,
+      worker,
       runtime,
+    }
+  }
+
+  pub async fn stop(&mut self) {
+    self.worker.stop().await;
+    for (_, mut source) in self.sources.lock().await.drain() {
+      source.stop().await;
     }
   }
 
@@ -64,8 +73,6 @@ impl SourceManager {
       )
       .await;
   }
-
-  // TODO stop all
 
   async fn run(
     sources: SourceMap,

@@ -8,7 +8,7 @@ use tokio::sync::mpsc;
 use oddity_rtsp_protocol::Transport;
 
 use crate::runtime::Runtime;
-use crate::runtime::task_manager::TaskContext;
+use crate::runtime::task_manager::{Task, TaskContext};
 use crate::net::connection::Connection;
 use crate::session::session::{
   Session,
@@ -23,19 +23,20 @@ type SessionMap = Arc<Mutex<HashMap<SessionId, Session>>>;
 pub struct SessionManager {
   sessions: SessionMap,
   session_state_tx: SessionStateTx,
+  worker: Task,
   runtime: Arc<Runtime>,
 }
 
 impl SessionManager {
 
-  pub async fn new(
+  pub async fn start(
     runtime: Arc<Runtime>,
   ) -> Self {
     let sessions = Arc::new(Mutex::new(HashMap::new()));
     let (session_state_tx, session_state_rx) =
       mpsc::unbounded_channel();
 
-    runtime
+    let worker = runtime
       .task()
       .spawn({
         let sessions = sessions.clone();
@@ -53,6 +54,15 @@ impl SessionManager {
       sessions,
       session_state_tx,
       runtime,
+      worker,
+    }
+  }
+
+  pub async fn stop(&mut self) {
+    self.worker.stop().await;
+    // TODO move this into run???
+    for (_, mut session) in self.sessions.lock().await.drain() {
+      session.teardown().await;
     }
   }
 
@@ -76,8 +86,8 @@ impl SessionManager {
     &mut self,
     id: &SessionId,
   ) {
-    if let Some(session) = self.sessions.lock().await.get(id) {
-      session.teardown()
+    if let Some(session) = self.sessions.lock().await.get_mut(id) {
+      session.teardown().await;
     } else {
       // TODO
     }
