@@ -11,6 +11,7 @@ use oddity_rtsp_protocol::{Codec, AsServer, ResponseMaybeInterleaved};
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::net::handler::Handler;
 
 pub enum ConnectionState {
   Disconnected(ConnectionId),
@@ -23,16 +24,17 @@ pub type ConnectionStateRx = mpsc::UnboundedReceiver<ConnectionState>;
 pub type ResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
 pub type ResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
-pub struct Connection {
+pub struct Connection<H: Handler> {
   sender_tx: ResponseSenderTx,
   worker: Task,
 }
 
-impl Connection {
+impl<H: Handler> Connection<H> {
 
   pub async fn start(
     id: ConnectionId,
     inner: net::TcpStream,
+    handler: H,
     state_tx: ConnectionStateTx,
     runtime: &Runtime,
   ) -> Self {
@@ -44,6 +46,7 @@ impl Connection {
         move |task_context| Self::run(
           id,
           inner,
+          handler,
           state_tx,
           sender_rx,
           task_context,
@@ -68,6 +71,7 @@ impl Connection {
   async fn run(
     id: ConnectionId,
     inner: net::TcpStream,
+    handler: H,
     state_tx: ConnectionStateTx,
     mut response_rx: ResponseSenderRx,
     mut task_context: TaskContext,
@@ -82,7 +86,6 @@ impl Connection {
           match packet {
             Some(packet) => {
               if let Err(err) = outbound.send(packet).await {
-                // TODO handle
                 // TODO this is a complicated piece of the puzzle because we need to figure
                 // out how connection communicates with the source and session manager with-
                 // out too much hackiness... channels????
@@ -96,7 +99,7 @@ impl Connection {
         packet = inbound.next() => {
           match packet {
             Some(Ok(packet)) => {
-              // TODO
+              handler.handle(packet).await; // TODO maybe can err?
             },
             Some(Err(err)) => {
               // TODO
