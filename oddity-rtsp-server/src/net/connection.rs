@@ -1,37 +1,69 @@
+use futures::SinkExt;
 use tokio::select;
-use tokio::sync::oneshot;
+use tokio::sync::broadcast;
+use tokio::sync::mpsc;
 use tokio::net;
 use tokio_stream::StreamExt;
 use tokio_util::codec;
 
-use oddity_rtsp_protocol::{Codec, AsServer};
+use rand::random;
+
+use oddity_rtsp_protocol::{Codec, AsServer, ResponseMaybeInterleaved};
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::TaskContext;
 
-type DisconnectTx = oneshot::Sender<()>;
-type DisconnectRx = oneshot::Receiver<()>;
+pub enum ConnectionState {
+  Disconnected(ConnectionId),
+  Closed(ConnectionId),
+}
+
+pub type ConnectionStateTx = mpsc::UnboundedSender<ConnectionState>;
+pub type ConnectionStateRx = mpsc::UnboundedReceiver<ConnectionState>;
+
+type RtspResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
+type RtspResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
 pub struct Connection {
-  // TODO disconnect handling
+  sender_tx: RtspResponseSenderTx,
 }
 
 impl Connection {
 
   pub async fn start(
+    id: ConnectionId,
     inner: net::TcpStream,
+    state_tx: ConnectionStateTx,
     runtime: &Runtime,
   ) -> Self {
+    let (sender_tx, sender_rx) = mpsc::unbounded_channel();
+
     runtime
       .task()
-      .spawn(move |task_context| Self::run(inner, task_context));
+      .spawn(
+        move |task_context| Self::run(
+          id,
+          inner,
+          state_tx,
+          sender_rx,
+          task_context,
+        )
+      );
 
     Connection {
+      sender_tx,
     }
   }
 
+  pub fn sender_tx(&self) -> RtspResponseSenderTx {
+    self.sender_tx.clone()
+  }
+
   async fn run(
+    id: ConnectionId,
     inner: net::TcpStream,
+    state_tx: ConnectionStateTx,
+    mut response_rx: RtspResponseSenderRx,
     mut task_context: TaskContext,
   ) {
     let (read, write) = inner.into_split();
@@ -40,16 +72,66 @@ impl Connection {
 
     loop {
       select! {
+        packet = response_rx.recv() => {
+          match packet {
+            Some(packet) => {
+              if let Err(err) = outbound.send(packet).await {
+                // TODO handle
+              }
+            },
+            None => {
+              break;
+            },
+          }
+        },
         packet = inbound.next() => {
-
+          match packet {
+            Some(Ok(packet)) => {
+              // TODO
+            },
+            Some(Err(err)) => {
+              // TODO
+            },
+            None => {
+              let _ = state_tx.send(ConnectionState::Disconnected(id));
+              break;
+            },
+          }
         },
         _ = task_context.wait_for_stop() => {
           break;
         },
       };
     }
+
+    let _ = state_tx.send(ConnectionState::Closed(id));
   }
 
-  // TODO writer task!
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+pub struct ConnectionId(usize);
+
+impl ConnectionId {
+
+  pub fn generate() -> Self {
+    Self(random())
+  }
+
+}
+
+pub struct ConnectionIdGenerator(usize);
+
+impl ConnectionIdGenerator {
+
+  pub fn new() -> Self {
+    ConnectionIdGenerator(0)
+  }
+
+  pub fn generate(&mut self) -> ConnectionId {
+    let id = self.0;
+    self.0 += 1;
+    ConnectionId(id)
+  }
 
 }

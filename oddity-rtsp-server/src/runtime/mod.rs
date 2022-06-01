@@ -18,7 +18,7 @@ impl Runtime {
     &self.task_manager
   }
 
-  pub async fn stop(mut self) {
+  pub async fn stop(&self) {
     self.task_manager.stop().await
   }
 
