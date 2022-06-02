@@ -1,5 +1,6 @@
+use std::fmt;
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use tokio::select;
 use tokio::sync::Mutex;
@@ -67,15 +68,24 @@ impl SessionManager {
   pub async fn setup_and_start(
     &mut self,
     setup: SessionSetup,
-  ) {
+  ) -> Result<SessionId, RegisterSessionError> {
     let session_id = SessionId::generate();
-    let session = Session::setup_and_start(
-        session_id,
-        setup,
-        self.session_state_tx.clone(),
-        self.runtime.as_ref(),
-      )
-      .await;
+    if let Entry::Vacant(entry) = self
+        .sessions
+        .lock().await
+        .entry(session_id.clone()) {
+      let _ = entry.insert(
+        Session::setup_and_start(
+          session_id.clone(),
+          setup,
+          self.session_state_tx.clone(),
+          self.runtime.as_ref(),
+        ).await
+      );
+      Ok(session_id)
+    } else {
+      Err(RegisterSessionError::AlreadyRegistered)
+    }
   }
 
   pub async fn teardown(
@@ -114,4 +124,18 @@ impl SessionManager {
     }
   }
   
+}
+
+pub enum RegisterSessionError {
+  AlreadyRegistered,
+}
+
+impl fmt::Display for RegisterSessionError {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      RegisterSessionError::AlreadyRegistered => write!(f, "already registered"),
+    }
+  }
+
 }

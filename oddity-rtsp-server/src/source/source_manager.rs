@@ -1,5 +1,6 @@
+use std::fmt;
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, hash_map::Entry};
 
 use tokio::select;
 use tokio::sync::Mutex;
@@ -70,14 +71,24 @@ impl SourceManager {
     name: String,
     path: SourcePath,
     descriptor: MediaDescriptor,
-  ) {
-    let source = Source::start(
-      name,
-      path,
-      descriptor,
-      self.source_state_tx.clone(),
-      self.runtime.as_ref(),
-    ).await;
+  ) -> Result<(), RegisterSourceError> {
+    if let Entry::Vacant(entry) = self
+        .sources
+        .lock().await
+        .entry(path.clone()) {
+      let _ = entry.insert(
+        Source::start(
+          name,
+          path,
+          descriptor,
+          self.source_state_tx.clone(),
+          self.runtime.as_ref(),
+        ).await
+      );
+      Ok(())
+    } else {
+      Err(RegisterSourceError::AlreadyRegistered)
+    }
   }
 
   pub async fn describe(
@@ -121,4 +132,18 @@ impl SourceManager {
     }
   }
   
+}
+
+pub enum RegisterSourceError {
+  AlreadyRegistered,
+}
+
+impl fmt::Display for RegisterSourceError {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      RegisterSourceError::AlreadyRegistered => write!(f, "already registered"),
+    }
+  }
+
 }

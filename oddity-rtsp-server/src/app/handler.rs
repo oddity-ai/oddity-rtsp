@@ -7,7 +7,9 @@ use oddity_rtsp_protocol::{
   Status,
 };
 
+use crate::net::connection::ResponseSenderTx;
 use crate::session::session::SessionId;
+use crate::session::session_manager::RegisterSessionError;
 use crate::session::setup::{SessionSetup, SessionSetupError};
 use crate::app::AppContext;
 
@@ -23,7 +25,11 @@ impl AppHandler {
     }
   }
 
-  pub async fn handle(&self, request: &Request) -> Response {
+  pub async fn handle(
+    &self,
+    request: &Request,
+    responder: ResponseSenderTx,
+  ) -> Response {
     // Check the Require header and make sure all requested options are
     // supported or return response with 551 Option Not Supported.
     if !is_request_require_supported(request) {
@@ -83,6 +89,8 @@ impl AppHandler {
           return reply_aggregate_operation_not_allowed(request);
         }
 
+        // TODO let source = self.context.source_manager.get();
+
         let transport = match request.transport() {
           Ok(transport) => transport,
           Err(_) => {
@@ -95,7 +103,7 @@ impl AppHandler {
         // TODO couple to source
         let session_setup = match SessionSetup::from_rtsp_candidate_transports(
           transport,
-          _, // TODO get sender tx via params
+          responder,
         ) {
           Ok(session_setup) => session_setup,
           Err(SessionSetupError::TransportNotSupported) |
@@ -116,17 +124,13 @@ impl AppHandler {
           Ok(session_id) => {
             reply_to_setup_with_session_id(request, &session_id)
           },
-          // Failed to read media source.
-          Err(RegisterSessionError::MediaInvalid) => {
-            reply_internal_server_error(request)
-          },
           // Path not found, source does not exist.
           Err(RegisterSessionError::NotFound) => {
             reply_not_found(request)
           },
           // In the highly unlikely case that the randomly generated session was already
           // in use before.
-          Err(RegisterSessionError::AlreadyExists) => {
+          Err(RegisterSessionError::AlreadyRegistered) => {
             tracing::error!(
               %request,
               "session id already present (collision)");

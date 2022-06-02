@@ -45,16 +45,18 @@ impl Connection {
 
     let worker = runtime
       .task()
-      .spawn(
+      .spawn({
+        let sender_tx = sender_tx.clone();
         move |task_context| Self::run(
           id,
           inner,
           handler,
           state_tx,
+          sender_tx,
           sender_rx,
           task_context,
         )
-      )
+      })
       .await;
 
     Connection {
@@ -76,6 +78,7 @@ impl Connection {
     inner: net::TcpStream,
     handler: Arc<Handler>,
     state_tx: ConnectionStateTx,
+    response_tx: ResponseSenderTx,
     mut response_rx: ResponseSenderRx,
     mut task_context: TaskContext,
   ) {
@@ -100,7 +103,9 @@ impl Connection {
         request = inbound.next() => {
           match request {
             Some(Ok(request)) => {
-              let response = handler.handle(&request).await;
+              // TODO can we make it so that it only is cloned when really needed
+              // since this is just wasteful
+              let response = handler.handle(&request, response_tx.clone()).await;
               let response = ResponseMaybeInterleaved::Message(response);
               if let Err(err) = outbound.send(response).await {
                 // TODO
