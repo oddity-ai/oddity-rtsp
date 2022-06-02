@@ -4,14 +4,14 @@ use crate::runtime::Runtime;
 use crate::net::handler::Handler;
 use crate::net::connection_manager::ConnectionManager;
 
-pub struct Server<H: Handler> {
-  connection_manager: ConnectionManager<H>,
+pub struct Server {
+  connection_manager: ConnectionManager,
 }
 
-impl<H: Handler> Server<H> {
+impl Server {
 
   pub async fn start(
-    handler: H,
+    handler: Handler,
     runtime: Arc<Runtime>,
   ) -> Self {
     Self {

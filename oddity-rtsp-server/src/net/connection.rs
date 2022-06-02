@@ -27,9 +27,6 @@ pub type ConnectionStateRx = mpsc::UnboundedReceiver<ConnectionState>;
 pub type ResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
 pub type ResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
-pub type Writer = codec::FramedWrite<net::tcp::OwnedWriteHalf, Codec<AsServer>>;
-pub type Reader = codec::FramedRead<net::tcp::OwnedReadHalf, Codec<AsServer>>;
-
 pub struct Connection {
   sender_tx: ResponseSenderTx,
   worker: Task,
@@ -40,7 +37,7 @@ impl Connection {
   pub async fn start(
     id: ConnectionId,
     inner: net::TcpStream,
-    handler: Arc<impl Handler>,
+    handler: Arc<Handler>,
     state_tx: ConnectionStateTx,
     runtime: &Runtime,
   ) -> Self {
@@ -77,7 +74,7 @@ impl Connection {
   async fn run(
     id: ConnectionId,
     inner: net::TcpStream,
-    handler: Arc<impl Handler>,
+    handler: Arc<Handler>,
     state_tx: ConnectionStateTx,
     mut response_rx: ResponseSenderRx,
     mut task_context: TaskContext,
@@ -88,10 +85,11 @@ impl Connection {
 
     loop {
       select! {
-        packet = response_rx.recv() => {
-          match packet {
-            Some(packet) => {
-              if let Err(err) = outbound.send(packet).await {
+        message = response_rx.recv() => {
+          match message {
+            Some(message) => {
+              if let Err(err) = outbound.send(message).await {
+                // TODO
               }
             },
             None => {
@@ -99,10 +97,14 @@ impl Connection {
             },
           }
         },
-        packet = inbound.next() => {
-          match packet {
-            Some(Ok(packet)) => {
-              handler.handle(packet, &outbound);
+        request = inbound.next() => {
+          match request {
+            Some(Ok(request)) => {
+              let response = handler.handle(&request).await;
+              let response = ResponseMaybeInterleaved::Message(response);
+              if let Err(err) = outbound.send(response).await {
+                // TODO
+              }
             },
             Some(Err(err)) => {
               // TODO

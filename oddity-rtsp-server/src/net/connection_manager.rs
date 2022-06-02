@@ -20,19 +20,19 @@ use crate::net::connection::{
 
 type ConnectionMap = Arc<Mutex<HashMap<ConnectionId, Connection>>>;
 
-pub struct ConnectionManager<H: Handler> {
+pub struct ConnectionManager {
   connections: ConnectionMap,
   connection_id_generator: ConnectionIdGenerator,
   connection_state_tx: ConnectionStateTx,
-  handler: Arc<H>,
+  handler: Arc<Handler>,
   worker: Task,
   runtime: Arc<Runtime>,
 }
 
-impl<H: Handler> ConnectionManager<H> {
+impl ConnectionManager {
 
   pub async fn start(
-    handler: H,
+    handler: Handler,
     runtime: Arc<Runtime>,
   ) -> Self {
     let connections = Arc::new(Mutex::new(HashMap::new()));
