@@ -24,7 +24,7 @@ pub use oddity_sdp_protocol::Sdp;
 /// * `name` - Name of stream.
 /// * `descriptor` - Media stream descriptor.
 pub async fn create(
-  name: String,
+  name: &str,
   descriptor: &MediaDescriptor,
 ) -> Result<Sdp, SdpError> {
   // TODO SPAWN_BLOCKING for BLOCKING PARTS !!!!!!!!!!!!
@@ -70,7 +70,7 @@ pub async fn create(
 
   let sdp = Sdp::new(
     ORIGIN_DUMMY_HOST.into(),
-    name,
+    name.to_string(),
     TARGET_DUMMY_HOST.into(),
     time_range
   );

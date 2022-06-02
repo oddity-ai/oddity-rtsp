@@ -67,16 +67,17 @@ impl SourceManager {
 
   pub async fn register_and_start(
     &mut self,
+    name: String,
     path: SourcePath,
     descriptor: MediaDescriptor,
   ) {
     let source = Source::start(
-        path,
-        descriptor,
-        self.source_state_tx.clone(),
-        self.runtime.as_ref(),
-      )
-      .await;
+      name,
+      path,
+      descriptor,
+      self.source_state_tx.clone(),
+      self.runtime.as_ref(),
+    ).await;
   }
 
   pub async fn describe(
@@ -84,7 +85,12 @@ impl SourceManager {
     path: &SourcePathRef,
   ) -> Option<Result<Sdp, SdpError>> {
     if let Some(source) = self.sources.lock().await.get(path.into()) {
-      Some(sdp::create("TODO".to_string(), &source.descriptor).await)
+      Some(
+        sdp::create(
+          &source.name,
+          &source.descriptor
+        ).await
+      )
     } else {
       None
     }

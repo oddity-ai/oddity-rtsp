@@ -27,6 +27,7 @@ pub type SourceControlTx = mpsc::UnboundedSender<SourceControlMessage>;
 pub type SourceControlRx = mpsc::UnboundedReceiver<SourceControlMessage>;
 
 pub struct Source {
+  pub name: String,
   pub path: SourcePath,
   pub descriptor: MediaDescriptor,
   control_tx: SourceControlTx,
@@ -38,6 +39,7 @@ pub struct Source {
 impl Source {
 
   pub async fn start(
+    name: String,
     path: SourcePath,
     descriptor: MediaDescriptor,
     state_tx: SourceStateTx,
@@ -67,6 +69,7 @@ impl Source {
       .await;
 
     Self {
+      name,
       path,
       descriptor,
       control_tx,
