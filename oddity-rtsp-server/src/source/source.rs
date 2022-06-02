@@ -4,7 +4,7 @@ use tokio::sync::broadcast;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
-use crate::media;
+use crate::media::{self, MediaDescriptor};
 
 pub enum SourceState {
   Stopped(SourcePath),
@@ -28,6 +28,8 @@ pub type SourceControlTx = mpsc::UnboundedSender<SourceControlMessage>;
 pub type SourceControlRx = mpsc::UnboundedReceiver<SourceControlMessage>;
 
 pub struct Source {
+  pub path: SourcePath,
+  pub descriptor: MediaDescriptor,
   control_tx: SourceControlTx,
   media_info_tx: SourceMediaInfoTx,
   packet_tx: SourcePacketTx,
@@ -38,6 +40,7 @@ impl Source {
 
   pub async fn start(
     path: SourcePath,
+    descriptor: MediaDescriptor,
     state_tx: SourceStateTx,
     runtime: &Runtime,
   ) -> Self {
@@ -48,6 +51,7 @@ impl Source {
     let worker = runtime
       .task()
       .spawn({
+        let path = path.clone();
         let media_info_tx = media_info_tx.clone();
         let packet_tx = packet_tx.clone();
         move |task_context| {
@@ -64,6 +68,8 @@ impl Source {
       .await;
 
     Self {
+      path,
+      descriptor,
       control_tx,
       media_info_tx,
       packet_tx,
@@ -75,8 +81,6 @@ impl Source {
     let _ = self.control_tx.send(SourceControlMessage::Stop);
     self.worker.stop().await;
   }
-
-  // TODO STOPPING
 
   pub fn control_tx(&self) -> SourceControlTx {
     self.control_tx.clone()

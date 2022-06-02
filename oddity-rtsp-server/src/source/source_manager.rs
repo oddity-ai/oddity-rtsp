@@ -7,6 +7,8 @@ use tokio::sync::mpsc;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::media::sdp::{self, Sdp, SdpError};
+use crate::media::MediaDescriptor;
 use crate::source::source::{
   Source,
   SourcePath,
@@ -65,13 +67,26 @@ impl SourceManager {
   pub async fn register_and_start(
     &mut self,
     path: SourcePath,
+    descriptor: MediaDescriptor,
   ) {
     let source = Source::start(
         path,
+        descriptor,
         self.source_state_tx.clone(),
         self.runtime.as_ref(),
       )
       .await;
+  }
+
+  pub async fn describe(
+    &self,
+    path: &SourcePath,
+  ) -> Option<Result<Sdp, SdpError>> {
+    self
+      .sources
+      .lock().await
+      .get(path)
+      .map(|source| sdp::create("TODO".to_string(), &source.descriptor))
   }
 
   async fn run(

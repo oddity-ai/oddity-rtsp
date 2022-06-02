@@ -41,10 +41,18 @@ impl AppHandler {
         if is_request_one_of_content_types_supported(request) {
           // TODO this will return 404 when the destination stream is actually
           // not readable...
-          if let Some(media_sdp) = media!().query_sdp(request.path()) {
-            reply_to_describe_with_media_sdp(request, media_sdp.clone())
-          } else {
-            reply_not_found(request)
+
+          match self.context.source_manager.describe(request.path()).await {
+            Some(Ok(sdp_contents)) => {
+              reply_to_describe_with_media_sdp(request, sdp_contents.to_string())
+            },
+            Some(Err(err)) => {
+              // TODO TODO MORE USEFUL ERROR MESSAGE WHEN MEDIA FAILURE
+              reply_internal_server_error(request)
+            },
+            None => {
+              reply_not_found(request)
+            },
           }
         } else {
           tracing::warn!(
