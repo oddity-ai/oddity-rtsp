@@ -10,7 +10,7 @@ use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::media::sdp::{self, Sdp, SdpError};
 use crate::media::MediaDescriptor;
-use crate::source::source::{
+use crate::source::{
   Source,
   SourceDelegate,
   SourcePath,

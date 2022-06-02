@@ -8,9 +8,9 @@ use tokio::sync::mpsc;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
-use crate::source::source::SourceDelegate;
+use crate::source::SourceDelegate;
 use crate::session::setup::SessionSetup;
-use crate::session::session::{
+use crate::session::{
   Session,
   SessionId,
   SessionState,

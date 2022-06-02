@@ -2,12 +2,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use config::{
-  Config,
-  ConfigError,
-  Environment,
-  File,
-};
+use config::{Config, ConfigError};
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
@@ -53,8 +48,8 @@ impl Settings {
 
   pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
     Config::builder()
-      .add_source(File::from(path))
-      .add_source(Environment::with_prefix("oddity"))
+      .add_source(config::File::from(path))
+      .add_source(config::Environment::with_prefix("oddity"))
       .build()?
       .try_deserialize()
   }

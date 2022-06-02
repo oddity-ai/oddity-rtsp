@@ -10,7 +10,7 @@ use crate::media::{
 };
 
 /// Receiver channel type for source-produced messages.
-pub type Rx = concurrency::channel::Receiver<Packet>;
+// pub type Rx = concurrency::channel::Receiver<Packet>;
 
 /// Internal service function that performs the actual reading process.
 pub fn run(

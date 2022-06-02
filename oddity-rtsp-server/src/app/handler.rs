@@ -10,7 +10,7 @@ use oddity_rtsp_protocol::{
 };
 
 use crate::net::connection::ResponseSenderTx;
-use crate::session::session::SessionId;
+use crate::session::SessionId;
 use crate::session::session_manager::RegisterSessionError;
 use crate::session::setup::{SessionSetup, SessionSetupError};
 use crate::app::AppContext;
