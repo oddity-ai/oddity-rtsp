@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use futures::SinkExt;
+
 use tokio::select;
 use tokio::sync::mpsc;
 use tokio::net;
@@ -24,17 +27,20 @@ pub type ConnectionStateRx = mpsc::UnboundedReceiver<ConnectionState>;
 pub type ResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
 pub type ResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
-pub struct Connection<H: Handler> {
+pub type Writer = codec::FramedWrite<net::tcp::OwnedWriteHalf, Codec<AsServer>>;
+pub type Reader = codec::FramedRead<net::tcp::OwnedReadHalf, Codec<AsServer>>;
+
+pub struct Connection {
   sender_tx: ResponseSenderTx,
   worker: Task,
 }
 
-impl<H: Handler> Connection<H> {
+impl Connection {
 
   pub async fn start(
     id: ConnectionId,
     inner: net::TcpStream,
-    handler: H,
+    handler: Arc<impl Handler>,
     state_tx: ConnectionStateTx,
     runtime: &Runtime,
   ) -> Self {
@@ -71,7 +77,7 @@ impl<H: Handler> Connection<H> {
   async fn run(
     id: ConnectionId,
     inner: net::TcpStream,
-    handler: H,
+    handler: Arc<impl Handler>,
     state_tx: ConnectionStateTx,
     mut response_rx: ResponseSenderRx,
     mut task_context: TaskContext,
@@ -86,9 +92,6 @@ impl<H: Handler> Connection<H> {
           match packet {
             Some(packet) => {
               if let Err(err) = outbound.send(packet).await {
-                // TODO this is a complicated piece of the puzzle because we need to figure
-                // out how connection communicates with the source and session manager with-
-                // out too much hackiness... channels????
               }
             },
             None => {
@@ -99,7 +102,7 @@ impl<H: Handler> Connection<H> {
         packet = inbound.next() => {
           match packet {
             Some(Ok(packet)) => {
-              handler.handle(packet).await; // TODO maybe can err?
+              handler.handle(packet, &outbound);
             },
             Some(Err(err)) => {
               // TODO

@@ -9,7 +9,6 @@ use oddity_rtsp_protocol::Transport;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
-use crate::net::connection::{Connection, ResponseSenderTx};
 
 pub enum SessionState {
   Stopped(SessionId),
@@ -34,7 +33,6 @@ impl Session {
 
   pub async fn start(
     id: SessionId,
-    connection: &Connection,
     transport: Transport,
     state_tx: SessionStateTx,
     runtime: &Runtime,

@@ -1,12 +1,9 @@
-use std::future::Future;
-
 use oddity_rtsp_protocol::Request;
 
-use crate::net::connection::ResponseSenderTx;
+use crate::net::connection::Writer;
 
-pub trait Handler {
-  type Output: Future<Output = ()>;
+pub trait Handler: Send + Sync + 'static {
 
-  fn handle(request: Request, responder: ResponseSenderTx) -> Self::Output;
+  fn handle(&self, request: Request, writer: &Writer);
 
 }

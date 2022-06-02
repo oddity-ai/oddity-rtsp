@@ -8,6 +8,7 @@ use tokio::net;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::net::handler::Handler;
 use crate::net::connection::{
   Connection,
   ConnectionId,
@@ -19,17 +20,19 @@ use crate::net::connection::{
 
 type ConnectionMap = Arc<Mutex<HashMap<ConnectionId, Connection>>>;
 
-pub struct ConnectionManager {
+pub struct ConnectionManager<H: Handler> {
   connections: ConnectionMap,
   connection_id_generator: ConnectionIdGenerator,
   connection_state_tx: ConnectionStateTx,
+  handler: Arc<H>,
   worker: Task,
   runtime: Arc<Runtime>,
 }
 
-impl ConnectionManager {
+impl<H: Handler> ConnectionManager<H> {
 
   pub async fn start(
+    handler: H,
     runtime: Arc<Runtime>,
   ) -> Self {
     let connections = Arc::new(Mutex::new(HashMap::new()));
@@ -55,6 +58,7 @@ impl ConnectionManager {
       connections,
       connection_id_generator: ConnectionIdGenerator::new(),
       connection_state_tx,
+      handler: Arc::new(handler),
       worker,
       runtime,
     }
@@ -76,6 +80,7 @@ impl ConnectionManager {
     let connection = Connection::start(
         id,
         stream,
+        self.handler.clone(),
         self.connection_state_tx.clone(),
         self.runtime.as_ref())
       .await;
