@@ -1,13 +1,16 @@
-use std::path::Path;
+use std::error::Error;
+use std::path::{PathBuf, Path};
 
 use serde::Deserialize;
 
 use config::{Config, ConfigError};
 
+use crate::media::MediaDescriptor;
+
 #[derive(Debug, Deserialize)]
-pub struct Settings {
+pub struct AppConfig {
   pub server: Server,
-  pub media: Vec<MediaItem>,
+  pub media: Vec<Item>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -17,10 +20,26 @@ pub struct Server {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MediaItem {
+pub struct Item {
+  pub name: String,
   pub path: String,
   pub kind: MediaKind,
   pub source: String,
+}
+
+impl Item {
+
+  pub fn as_media_descriptor(&self) -> Result<MediaDescriptor, Box<dyn Error>> {
+    Ok(
+      match self.kind {
+        MediaKind::File
+          => MediaDescriptor::File(PathBuf::from(self.source.to_string())),
+        MediaKind::Stream
+          => MediaDescriptor::Stream(self.source.parse()?),
+      }
+    )
+  }
+
 }
 
 #[derive(Debug, Deserialize)]
@@ -30,7 +49,7 @@ pub enum MediaKind {
   Stream,
 }
 
-impl Default for Settings {
+impl Default for AppConfig {
 
   fn default() -> Self {
     Self {
@@ -44,7 +63,7 @@ impl Default for Settings {
 
 }
 
-impl Settings {
+impl AppConfig {
 
   pub fn from_file(path: &Path) -> Result<Self, ConfigError> {
     Config::builder()

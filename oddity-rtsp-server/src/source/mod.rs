@@ -41,7 +41,7 @@ pub struct Source {
 impl Source {
 
   pub async fn start(
-    name: String,
+    name: &str,
     path: SourcePath,
     descriptor: MediaDescriptor,
     state_tx: SourceStateTx,
@@ -71,7 +71,7 @@ impl Source {
       .await;
 
     Self {
-      name,
+      name: name.to_string(),
       path,
       descriptor,
       control_tx,
@@ -101,8 +101,6 @@ impl Source {
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
   ) {
-    // TODO if the connection_sender_tx (inside Transport) dies the it is
-    // similar to transport being closed (underlying connection died)
     loop {
       select! {
         _ = control_rx.recv() => {

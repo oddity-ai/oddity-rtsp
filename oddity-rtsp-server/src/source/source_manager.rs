@@ -69,7 +69,7 @@ impl SourceManager {
 
   pub async fn register_and_start(
     &mut self,
-    name: String,
+    name: &str,
     path: SourcePath,
     descriptor: MediaDescriptor,
   ) -> Result<(), RegisterSourceError> {

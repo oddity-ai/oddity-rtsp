@@ -105,7 +105,6 @@ impl AppHandler {
           }
         };
 
-        // TODO let source = self.context.source_manager.get();
         let source_delegate = match self
             .use_context()
             .await
@@ -119,7 +118,6 @@ impl AppHandler {
           },
         };
 
-        // TODO couple to source
         let session_setup = match SessionSetup::from_rtsp_candidate_transports(
           transport,
           responder,

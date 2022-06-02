@@ -1,5 +1,7 @@
+pub mod config;
 pub mod handler;
 
+use std::error::Error;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -9,6 +11,7 @@ use crate::net::server::Server;
 use crate::source::source_manager::SourceManager;
 use crate::session::session_manager::SessionManager;
 use crate::app::handler::AppHandler;
+use crate::app::config::AppConfig;
 
 #[derive(Clone)]
 pub enum AppState {
@@ -26,23 +29,30 @@ pub struct App {
 
 impl App {
 
-  pub async fn start() -> App {
+  pub async fn start(config: AppConfig) -> Result<App, Box<dyn Error>> {
     let runtime = Arc::new(Runtime::new());
-    let context = Arc::new(
-      Mutex::new(
-        AppContext {
-          source_manager: SourceManager::start(runtime.clone()).await,
-          session_manager: SessionManager::start(runtime.clone()).await,
-        }
-      )
-    );
+    let mut context = AppContext {
+      source_manager: SourceManager::start(runtime.clone()).await,
+      session_manager: SessionManager::start(runtime.clone()).await,
+    };
+    for item in config.media {
+      context
+        .source_manager
+        .register_and_start(
+          item.name.as_str(),
+          item.path.clone(),
+          item.as_media_descriptor()?,
+        ).await;
+    }
+
+    let context = Arc::new(Mutex::new(context));
     let handler = AppHandler::new(context.clone());
-    Self {
+    Ok(Self {
       server: Server::start(handler, runtime.clone()).await,
       state: Arc::new(Mutex::new(AppState::Running)),
       context,
       runtime,
-    }
+    })
   }
 
   pub async fn stop(&mut self) {

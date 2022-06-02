@@ -1,5 +1,4 @@
 mod app;
-mod settings;
 mod net;
 mod media;
 mod source;
@@ -13,7 +12,7 @@ use std::env;
 use config::ConfigError;
 
 use app::App;
-use settings::Settings;
+use app::config::AppConfig;
 
 use tokio::signal::ctrl_c;
 
@@ -22,14 +21,21 @@ async fn main() {
   initialize_tracing()
     .expect("failed to initialize tracing");
 
-  let settings =
-    initialize_and_read_settings()
-      .expect("failed to load settings");
+  let config =
+    initialize_and_read_config()
+      .expect("failed to load config");
 
-  tracing::debug!(?settings, "read settings file");
+  tracing::debug!(?config, "read config file");
 
-  let mut app = App::start().await;
-  ctrl_c().await.expect("failed to listen for signal");
+  let mut app = App::start(config)
+    .await
+    .expect("failed to start application");
+
+  // Wait for SIGINT and then stop the application.
+  ctrl_c()
+    .await
+    .expect("failed to listen for signal");
+
   app.stop().await;
 }
 
@@ -39,11 +45,11 @@ fn initialize_tracing() -> Result<(), Box<dyn Error + Send + Sync>> {
     .try_init()
 }
 
-fn initialize_and_read_settings() -> Result<Settings, ConfigError> {
-  let settings_file = env::args()
+fn initialize_and_read_config() -> Result<AppConfig, ConfigError> {
+  let config_file = env::args()
     .nth(1)
     .unwrap_or("default.yaml".to_string());
-  let settings_file = Path::new(&settings_file);
+  let config_file = Path::new(&config_file);
 
-  Settings::from_file(settings_file)
+  AppConfig::from_file(config_file)
 }
