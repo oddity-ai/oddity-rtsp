@@ -21,7 +21,6 @@ pub type SourcePacketRx = broadcast::Receiver<media::Packet>;
 
 pub enum SourceControlMessage {
   StreamInfo,
-  Stop,
 }
 
 pub type SourceControlTx = mpsc::UnboundedSender<SourceControlMessage>;
@@ -78,7 +77,6 @@ impl Source {
   }
 
   pub async fn stop(&mut self) {
-    let _ = self.control_tx.send(SourceControlMessage::Stop);
     self.worker.stop().await;
   }
 
@@ -120,5 +118,5 @@ impl Source {
 
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct SourcePath(String);
+pub type SourcePath = String;
+pub type SourcePathRef = str;

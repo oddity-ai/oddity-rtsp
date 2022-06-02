@@ -12,6 +12,7 @@ use crate::media::MediaDescriptor;
 use crate::source::source::{
   Source,
   SourcePath,
+  SourcePathRef,
   SourceState,
   SourceStateTx,
   SourceStateRx,
@@ -80,13 +81,13 @@ impl SourceManager {
 
   pub async fn describe(
     &self,
-    path: &SourcePath,
+    path: &SourcePathRef,
   ) -> Option<Result<Sdp, SdpError>> {
-    self
-      .sources
-      .lock().await
-      .get(path)
-      .map(|source| sdp::create("TODO".to_string(), &source.descriptor))
+    if let Some(source) = self.sources.lock().await.get(path.into()) {
+      Some(sdp::create("TODO".to_string(), &source.descriptor).await)
+    } else {
+      None
+    }
   }
 
   async fn run(

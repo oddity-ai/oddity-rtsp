@@ -47,7 +47,10 @@ impl AppHandler {
               reply_to_describe_with_media_sdp(request, sdp_contents.to_string())
             },
             Some(Err(err)) => {
-              // TODO TODO MORE USEFUL ERROR MESSAGE WHEN MEDIA FAILURE
+              tracing::error!(
+                %request, %err,
+                "failed to query SDP of media source",
+              );
               reply_internal_server_error(request)
             },
             None => {
@@ -58,7 +61,8 @@ impl AppHandler {
           tracing::warn!(
             %request,
             "none of content types accepted by client are supported, \
-              server only supports `application/sdp`");
+             server only supports `application/sdp`",
+          );
           reply_not_acceptable(request)
         }
       },

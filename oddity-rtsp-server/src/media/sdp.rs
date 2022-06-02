@@ -1,3 +1,5 @@
+use std::fmt;
+
 use oddity_video::{Reader, RtpMuxer};
 use oddity_sdp_protocol::{
   TimeRange,
@@ -87,4 +89,15 @@ pub async fn create(
 pub enum SdpError {
   CodecNotSupported,
   Media(oddity_video::Error),
+}
+
+impl fmt::Display for SdpError {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      SdpError::CodecNotSupported => write!(f, "codec not supported"),
+      SdpError::Media(error) => write!(f, "media error: {}", error),
+    }
+  }
+
 }

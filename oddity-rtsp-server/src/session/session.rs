@@ -17,15 +17,7 @@ pub enum SessionState {
 pub type SessionStateTx = mpsc::UnboundedSender<SessionState>;
 pub type SessionStateRx = mpsc::UnboundedReceiver<SessionState>;
 
-pub enum SessionControlMessage {
-  Teardown,
-}
-
-pub type SessionControlTx = mpsc::UnboundedSender<SessionControlMessage>;
-pub type SessionControlRx = mpsc::UnboundedReceiver<SessionControlMessage>;
-
 pub struct Session {
-  control_tx: SessionControlTx,
   worker: Task,
 }
 
@@ -37,14 +29,11 @@ impl Session {
     state_tx: SessionStateTx,
     runtime: &Runtime,
   ) -> Self {
-    let (control_tx, control_rx) = mpsc::unbounded_channel();
-
     let worker = runtime
       .task()
       .spawn(|task_context| {
         Self::run(
           id,
-          control_rx,
           state_tx,
           task_context,
         )
@@ -52,26 +41,16 @@ impl Session {
       .await;
 
     Self {
-      control_tx,
       worker,
     }
   }
 
   pub async fn teardown(&mut self) {
-    // First send a `Teardown` message to allow the session to be
-    // tore down safely and resources be released.
-    let _ = self.control_tx.send(SessionControlMessage::Teardown);
-    // Use `Task` mechanism to send stop signal and stop join task.
     let _ = self.worker.stop().await;
-  }
-
-  pub fn control_tx(&self) -> SessionControlTx {
-    self.control_tx.clone()
   }
 
   async fn run(
     id: SessionId,
-    mut control_rx: SessionControlRx,
     state_tx: SessionStateTx,
     mut task_context: TaskContext,
   ) {
@@ -79,9 +58,6 @@ impl Session {
     // similar to transport being closed (underlying connection died)
     loop {
       select! {
-        _ = control_rx.recv() => {
-          break;
-        },
         _ = task_context.wait_for_stop() => {
           break;
         },
