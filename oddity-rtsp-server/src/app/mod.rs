@@ -19,25 +19,29 @@ pub enum AppState {
 
 pub struct App {
   server: Server,
-  context: Arc<AppContext>,
-  runtime: Arc<Runtime>,
   state: Arc<Mutex<AppState>>,
+  context: Arc<Mutex<AppContext>>,
+  runtime: Arc<Runtime>,
 }
 
 impl App {
 
   pub async fn start() -> App {
     let runtime = Arc::new(Runtime::new());
-    let context = Arc::new(AppContext {
-      source_manager: SourceManager::start(runtime.clone()).await,
-      session_manager: SessionManager::start(runtime.clone()).await,
-    });
+    let context = Arc::new(
+      Mutex::new(
+        AppContext {
+          source_manager: SourceManager::start(runtime.clone()).await,
+          session_manager: SessionManager::start(runtime.clone()).await,
+        }
+      )
+    );
     let handler = AppHandler::new(context.clone());
     Self {
       server: Server::start(handler, runtime.clone()).await,
+      state: Arc::new(Mutex::new(AppState::Running)),
       context,
       runtime,
-      state: Arc::new(Mutex::new(AppState::Running)),
     }
   }
 

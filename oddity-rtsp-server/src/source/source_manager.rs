@@ -12,6 +12,7 @@ use crate::media::sdp::{self, Sdp, SdpError};
 use crate::media::MediaDescriptor;
 use crate::source::source::{
   Source,
+  SourceDelegate,
   SourcePath,
   SourcePathRef,
   SourceState,
@@ -102,6 +103,17 @@ impl SourceManager {
           &source.descriptor
         ).await
       )
+    } else {
+      None
+    }
+  }
+
+  pub async fn subscribe(
+    &self,
+    path: &SourcePathRef,
+  ) -> Option<SourceDelegate> {
+    if let Some(source) = self.sources.lock().await.get_mut(path.into()) {
+      Some(source.delegate())
     } else {
       None
     }

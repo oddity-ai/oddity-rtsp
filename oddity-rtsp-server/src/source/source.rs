@@ -83,16 +83,12 @@ impl Source {
     self.worker.stop().await;
   }
 
-  pub fn control_tx(&self) -> SourceControlTx {
-    self.control_tx.clone()
-  }
-
-  pub fn subscribe_to_media_info(&self) -> SourceMediaInfoRx {
-    self.media_info_tx.subscribe()
-  }
-
-  pub fn subscribe_to_packets(&self) -> SourcePacketRx {
-    self.packet_tx.subscribe()
+  pub fn delegate(&mut self) -> SourceDelegate {
+    SourceDelegate {
+      control_tx: self.control_tx.clone(),
+      media_info_rx: self.media_info_tx.subscribe(),
+      packet_rx: self.packet_tx.subscribe(),
+    }
   }
 
   async fn run(
@@ -117,6 +113,28 @@ impl Source {
     }
 
     let _ = state_tx.send(SourceState::Stopped(path));
+  }
+
+}
+
+pub struct SourceDelegate {
+  control_tx: SourceControlTx,
+  media_info_rx: SourceMediaInfoRx,
+  packet_rx: SourcePacketRx,
+}
+
+impl SourceDelegate {
+
+  pub async fn query_media_info(&mut self) -> Option<media::MediaInfo> {
+    if let Ok(()) = self.control_tx.send(SourceControlMessage::StreamInfo) {
+      self.media_info_rx.recv().await.ok()
+    } else {
+      None
+    }
+  }
+
+  pub async fn recv_packet(&mut self) -> Option<media::Packet> {
+    self.packet_rx.recv().await.ok()
   }
 
 }

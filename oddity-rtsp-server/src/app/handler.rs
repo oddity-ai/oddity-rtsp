@@ -1,5 +1,7 @@
 use std::sync::Arc;
 
+use tokio::sync::{Mutex, MutexGuard};
+
 use oddity_rtsp_protocol::{
   Request,
   Response,
@@ -14,12 +16,12 @@ use crate::session::setup::{SessionSetup, SessionSetupError};
 use crate::app::AppContext;
 
 pub struct AppHandler {
-  context: Arc<AppContext>,
+  context: Arc<Mutex<AppContext>>,
 }
 
 impl AppHandler {
 
-  pub fn new(context: Arc<AppContext>) -> Self {
+  pub fn new(context: Arc<Mutex<AppContext>>) -> Self {
     Self {
       context,
     }
@@ -46,7 +48,12 @@ impl AppHandler {
       },
       Method::Describe => {
         if is_request_one_of_content_types_supported(request) {
-          match self.context.source_manager.describe(request.path()).await {
+          match self
+              .use_context()
+              .await
+              .source_manager
+              .describe(request.path())
+              .await {
             Some(Ok(sdp_contents)) => {
               reply_to_describe_with_media_sdp(
                 request,
@@ -89,8 +96,6 @@ impl AppHandler {
           return reply_aggregate_operation_not_allowed(request);
         }
 
-        // TODO let source = self.context.source_manager.get();
-
         let transport = match request.transport() {
           Ok(transport) => transport,
           Err(_) => {
@@ -98,6 +103,20 @@ impl AppHandler {
             // no way to reach it and we return "Unsupported Transport".
             return reply_unsupported_transport(request);
           }
+        };
+
+        // TODO let source = self.context.source_manager.get();
+        let source_delegate = match self
+            .use_context()
+            .await
+            .source_manager
+            .subscribe(request.path())
+            .await {
+          Some(source_delegate) => source_delegate,
+          None => {
+            // Path not found, source does not exist.
+            return reply_not_found(request);
+          },
         };
 
         // TODO couple to source
@@ -119,14 +138,15 @@ impl AppHandler {
           },
         };
 
-        match self.context.session_manager.setup_and_start(session_setup).await {
+        match self
+            .use_context()
+            .await
+            .session_manager
+            .setup_and_start(source_delegate, session_setup)
+            .await {
           // Session was successfully registered!
           Ok(session_id) => {
             reply_to_setup_with_session_id(request, &session_id)
-          },
-          // Path not found, source does not exist.
-          Err(RegisterSessionError::NotFound) => {
-            reply_not_found(request)
           },
           // In the highly unlikely case that the randomly generated session was already
           // in use before.
@@ -157,6 +177,11 @@ impl AppHandler {
         reply_method_not_valid(request)
       },
     }
+  }
+
+  #[inline]
+  async fn use_context(&self) -> MutexGuard<'_, AppContext> {
+    self.context.lock().await
   }
 
 }

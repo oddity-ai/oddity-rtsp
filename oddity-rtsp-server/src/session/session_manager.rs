@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::source::source::SourceDelegate;
 use crate::session::setup::SessionSetup;
 use crate::session::session::{
   Session,
@@ -67,6 +68,7 @@ impl SessionManager {
 
   pub async fn setup_and_start(
     &mut self,
+    source_delegate: SourceDelegate,
     setup: SessionSetup,
   ) -> Result<SessionId, RegisterSessionError> {
     let session_id = SessionId::generate();
@@ -77,6 +79,7 @@ impl SessionManager {
       let _ = entry.insert(
         Session::setup_and_start(
           session_id.clone(),
+          source_delegate,
           setup,
           self.session_state_tx.clone(),
           self.runtime.as_ref(),

@@ -7,6 +7,7 @@ use rand::Rng;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::source::source::SourceDelegate;
 use crate::session::setup::SessionSetup;
 
 pub enum SessionState {
@@ -24,6 +25,7 @@ impl Session {
 
   pub async fn setup_and_start(
     id: SessionId,
+    source_delegate: SourceDelegate,
     setup: SessionSetup,
     state_tx: SessionStateTx,
     runtime: &Runtime,
@@ -33,6 +35,7 @@ impl Session {
       .spawn(|task_context| {
         Self::run(
           id,
+          source_delegate,
           setup,
           state_tx,
           task_context,
@@ -51,11 +54,12 @@ impl Session {
 
   async fn run(
     id: SessionId,
+    source_delegate: SourceDelegate,
     setup: SessionSetup,
     state_tx: SessionStateTx,
     mut task_context: TaskContext,
   ) {
-    // TODO if the connection_sender_tx (inside Transport) dies the it is
+    // TODO if the connection_sender_tx (inside setup) dies the it is
     // similar to transport being closed (underlying connection died)
     loop {
       select! {

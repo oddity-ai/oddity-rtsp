@@ -9,6 +9,9 @@ use app::App;
 
 use tokio::signal::ctrl_c;
 
+// TODO tracing
+// TODO config/settings
+
 #[tokio::main]
 async fn main() {
   let mut app = App::start().await;
