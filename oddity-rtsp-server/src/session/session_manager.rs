@@ -5,10 +5,9 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
-use oddity_rtsp_protocol::Transport;
-
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::session::setup::SessionSetup;
 use crate::session::session::{
   Session,
   SessionId,
@@ -67,12 +66,12 @@ impl SessionManager {
 
   pub async fn setup_and_start(
     &mut self,
-    transport: Transport,
+    setup: SessionSetup,
   ) {
     let session_id = SessionId::generate();
-    let session = Session::start(
+    let session = Session::setup_and_start(
         session_id,
-        transport,
+        setup,
         self.session_state_tx.clone(),
         self.runtime.as_ref(),
       )

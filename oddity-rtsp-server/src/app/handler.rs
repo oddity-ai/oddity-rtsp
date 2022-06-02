@@ -8,6 +8,7 @@ use oddity_rtsp_protocol::{
 };
 
 use crate::session::session::SessionId;
+use crate::session::setup::{SessionSetup, SessionSetupError};
 use crate::app::AppContext;
 
 pub struct AppHandler {
@@ -39,12 +40,12 @@ impl AppHandler {
       },
       Method::Describe => {
         if is_request_one_of_content_types_supported(request) {
-          // TODO this will return 404 when the destination stream is actually
-          // not readable...
-
           match self.context.source_manager.describe(request.path()).await {
             Some(Ok(sdp_contents)) => {
-              reply_to_describe_with_media_sdp(request, sdp_contents.to_string())
+              reply_to_describe_with_media_sdp(
+                request,
+                sdp_contents.to_string(),
+              )
             },
             Some(Err(err)) => {
               tracing::error!(
@@ -91,20 +92,26 @@ impl AppHandler {
           }
         };
 
-        let session_context = match make_session_context_from_transport(
+        // TODO couple to source
+        let session_setup = match SessionSetup::from_rtsp_candidate_transports(
           transport,
-          writer_tx,
+          _, // TODO get sender tx via params
         ) {
-          Ok(session_context) => session_context,
-          Err(_) => {
-            // If we cannot create a session from the given transport parameters, then this
-            // usually means that the client provided an invalid or unsupported `Transport`
-            // header parameterization.
+          Ok(session_setup) => session_setup,
+          Err(SessionSetupError::TransportNotSupported) |
+          Err(SessionSetupError::DestinationInvalid) => {
             return reply_unsupported_transport(request);
-          }
+          },
+          Err(SessionSetupError::Media(err)) => {
+            tracing::error!(
+              %request, %err,
+              "failed to setup session for media source",
+            );
+            return reply_internal_server_error(request)
+          },
         };
 
-        match media!().register_session(request.path(), session_context) {
+        match self.context.session_manager.setup_and_start(session_setup).await {
           // Session was successfully registered!
           Ok(session_id) => {
             reply_to_setup_with_session_id(request, &session_id)

@@ -5,10 +5,9 @@ use tokio::sync::mpsc;
 
 use rand::Rng;
 
-use oddity_rtsp_protocol::Transport;
-
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
+use crate::session::setup::SessionSetup;
 
 pub enum SessionState {
   Stopped(SessionId),
@@ -23,9 +22,9 @@ pub struct Session {
 
 impl Session {
 
-  pub async fn start(
+  pub async fn setup_and_start(
     id: SessionId,
-    transport: Transport,
+    setup: SessionSetup,
     state_tx: SessionStateTx,
     runtime: &Runtime,
   ) -> Self {
@@ -34,6 +33,7 @@ impl Session {
       .spawn(|task_context| {
         Self::run(
           id,
+          setup,
           state_tx,
           task_context,
         )
@@ -51,6 +51,7 @@ impl Session {
 
   async fn run(
     id: SessionId,
+    setup: SessionSetup,
     state_tx: SessionStateTx,
     mut task_context: TaskContext,
   ) {
