@@ -10,10 +10,13 @@ pub struct Server {
 
 impl Server {
 
+  // TODO implement
+
   pub async fn start(
     handler: Handler,
     runtime: Arc<Runtime>,
   ) -> Self {
+    tracing::trace!("staring server"); // TODO host port ?
     Self {
       connection_manager: ConnectionManager::start(handler, runtime.clone()).await,
     }

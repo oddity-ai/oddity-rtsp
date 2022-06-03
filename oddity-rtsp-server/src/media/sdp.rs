@@ -9,6 +9,8 @@ use oddity_sdp_protocol::{
 };
 
 use crate::media::MediaDescriptor;
+use crate::media::video::reader;
+use crate::media::video::rtp_muxer;
 
 pub use oddity_sdp_protocol::Sdp;
 
@@ -27,15 +29,16 @@ pub async fn create(
   name: &str,
   descriptor: &MediaDescriptor,
 ) -> Result<Sdp, SdpError> {
-  // TODO SPAWN_BLOCKING for BLOCKING PARTS !!!!!!!!!!!!
   const ORIGIN_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
   const TARGET_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
   const TARGET_DUMMY_PORT: u16 = 0;
 
-  let reader = Reader::new(&descriptor.clone().into())
+  tracing::trace!("sdp: initializing reader");
+  let reader = reader::make_reader(descriptor.clone().into()).await
     .map_err(SdpError::Media)?;
   let best_video_stream = reader.best_video_stream_index()
     .map_err(SdpError::Media)?;
+  tracing::trace!(best_video_stream, "sdp: initialized reader");
 
   let time_range = match descriptor {
     MediaDescriptor::File(_)
@@ -43,11 +46,14 @@ pub async fn create(
     MediaDescriptor::Stream(_)
       => TimeRange::Live,
   };
+  tracing::trace!(%time_range, "sdp: determined time range");
 
-  let muxer = RtpMuxer::new()
+  tracing::trace!("sdp: initializing muxer");
+  let muxer = rtp_muxer::make_rtp_muxer().await
     .and_then(|muxer|
       muxer.with_stream(reader.stream_info(best_video_stream)?))
     .map_err(SdpError::Media)?;
+  tracing::trace!("sdp: initialized muxer");
 
   let (sps, pps) = muxer
     .parameter_sets_h264()
@@ -58,6 +64,7 @@ pub async fn create(
     .filter_map(Result::ok)
     .next()
     .ok_or_else(|| SdpError::CodecNotSupported)?;
+  tracing::trace!("sdp: found SPS and PPS");
 
   // Since the previous call to `parameter_sets_h264` can only
   // return a result if the underlying stream is H.264, we can
@@ -83,6 +90,7 @@ pub async fn create(
       codec_info,
     );
 
+  tracing::trace!(%sdp, "generated sdp");
   Ok(sdp)
 }
 

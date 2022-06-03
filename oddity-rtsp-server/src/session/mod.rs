@@ -22,6 +22,11 @@ pub enum SessionState {
 pub type SessionStateTx = mpsc::UnboundedSender<SessionState>;
 pub type SessionStateRx = mpsc::UnboundedReceiver<SessionState>;
 
+// TODO
+// tracing
+// - session
+// - source
+
 pub struct Session {
   worker: Task,
 }
@@ -64,6 +69,7 @@ impl Session {
     state_tx: SessionStateTx,
     mut task_context: TaskContext,
   ) {
+    // TODO implement
     // TODO if the connection_sender_tx (inside setup) dies the it is
     // similar to transport being closed (underlying connection died)
     loop {

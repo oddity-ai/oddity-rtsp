@@ -32,6 +32,8 @@ impl AppHandler {
     request: &Request,
     responder: ResponseSenderTx,
   ) -> Response {
+    tracing::trace!(%request, "handling request");
+
     // Check the Require header and make sure all requested options are
     // supported or return response with 551 Option Not Supported.
     if !is_request_require_supported(request) {
@@ -41,13 +43,17 @@ impl AppHandler {
     match request.method {
       /* Stateless */
       Method::Options => {
+        tracing::trace!("handling OPTIONS request");
         reply_to_options_with_supported_methods(request)
       },
       Method::Announce => {
+        tracing::trace!("handling ANNOUNCE request");
         reply_method_not_supported(request)
       },
       Method::Describe => {
+        tracing::trace!("handling DESCRIBE request");
         if is_request_one_of_content_types_supported(request) {
+          tracing::trace!(path=request.path(), "querying SDP file for source");
           match self
               .use_context()
               .await
@@ -55,16 +61,14 @@ impl AppHandler {
               .describe(request.path())
               .await {
             Some(Ok(sdp_contents)) => {
+              tracing::trace!(path=request.path(), %sdp_contents, "have SDP");
               reply_to_describe_with_media_sdp(
                 request,
                 sdp_contents.to_string(),
               )
             },
             Some(Err(err)) => {
-              tracing::error!(
-                %request, %err,
-                "failed to query SDP of media source",
-              );
+              tracing::error!(%request, %err, "failed to query SDP of media source");
               reply_internal_server_error(request)
             },
             None => {
@@ -81,13 +85,16 @@ impl AppHandler {
         }
       },
       Method::GetParameter => {
+        tracing::trace!("handling GET_PARAMETER request");
         reply_method_not_supported(request)
       },
       Method::SetParameter => {
+        tracing::trace!("handling SET_PARAMETER request");
         reply_method_not_supported(request)
       },
       /* Stateful */
       Method::Setup => {
+        tracing::trace!("handling SETUP request");
         if request.session().is_some() {
           // RFC specification allows negatively responding to SETUP request with Session
           // IDs by responding with 459 Aggregate Operation Not Allowed. By handling this
@@ -104,6 +111,7 @@ impl AppHandler {
             return reply_unsupported_transport(request);
           }
         };
+        tracing::trace!(path=request.path(), ?transport, "resolved transport");
 
         let source_delegate = match self
             .use_context()
@@ -113,10 +121,10 @@ impl AppHandler {
             .await {
           Some(source_delegate) => source_delegate,
           None => {
-            // Path not found, source does not exist.
             return reply_not_found(request);
           },
         };
+        tracing::trace!(path=request.path(), "acquired source delegate");
 
         let session_setup = match SessionSetup::from_rtsp_candidate_transports(
           transport,
@@ -135,6 +143,7 @@ impl AppHandler {
             return reply_internal_server_error(request)
           },
         };
+        tracing::trace!(path=request.path(), "setup session");
 
         match self
             .use_context()
@@ -144,6 +153,7 @@ impl AppHandler {
             .await {
           // Session was successfully registered!
           Ok(session_id) => {
+            tracing::trace!(path=request.path(), %session_id, "registered session");
             reply_to_setup_with_session_id(request, &session_id)
           },
           // In the highly unlikely case that the randomly generated session was already
@@ -157,21 +167,28 @@ impl AppHandler {
         }
       },
       Method::Play => {
+        tracing::trace!("handling PLAY request");
+        // TODO
         unimplemented!();
       },
       Method::Pause => {
+        tracing::trace!("handling PAUSE request");
         reply_method_not_supported(request)
       },
       Method::Record => {
+        tracing::trace!("handling RECORD request");
         reply_method_not_supported(request)
       },
       Method::Teardown => {
+        tracing::trace!("handling TEARDOWN request");
+        // TODO
         unimplemented!();
       },
       /* Invalid */
       // Request with method REDIRECT can only be sent from server to
       // client, not the other way around.
       Method::Redirect => {
+        tracing::trace!("handling REDIRECT request");
         reply_method_not_valid(request)
       },
     }

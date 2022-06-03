@@ -60,7 +60,6 @@ impl SessionManager {
 
   pub async fn stop(&mut self) {
     self.worker.stop().await;
-    // TODO move this into run???
     for (_, mut session) in self.sessions.lock().await.drain() {
       session.teardown().await;
     }

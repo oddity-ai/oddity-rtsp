@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use futures::SinkExt;
@@ -43,6 +44,7 @@ impl Connection {
   ) -> Self {
     let (sender_tx, sender_rx) = mpsc::unbounded_channel();
 
+    tracing::trace!(%id, "starting connection");
     let worker = runtime
       .task()
       .spawn({
@@ -58,6 +60,7 @@ impl Connection {
         )
       })
       .await;
+    tracing::trace!(%id, "started connection");
 
     Connection {
       sender_tx,
@@ -66,7 +69,9 @@ impl Connection {
   }
   
   pub async fn close(&mut self) {
-    self.worker.stop().await
+    tracing::trace!("closing connection");
+    self.worker.stop().await;
+    tracing::trace!("closed connection");
   }
 
   pub fn sender_tx(&self) -> ResponseSenderTx {
@@ -82,6 +87,12 @@ impl Connection {
     mut response_rx: ResponseSenderRx,
     mut task_context: TaskContext,
   ) {
+    let mut disconnected = false;
+
+    let addr = inner
+      .peer_addr()
+      .map(|peer_addr| peer_addr.to_string())
+      .unwrap_or("?".to_string());
     let (read, write) = inner.into_split();
     let mut inbound = codec::FramedRead::new(read, Codec::<AsServer>::new());
     let mut outbound = codec::FramedWrite::new(write, Codec::<AsServer>::new());
@@ -92,7 +103,8 @@ impl Connection {
           match message {
             Some(message) => {
               if let Err(err) = outbound.send(message).await {
-                // TODO
+                tracing::error!(%err, %id, %addr, "connection: failed to send message");
+                break;
               }
             },
             None => {
@@ -108,25 +120,37 @@ impl Connection {
               let response = handler.handle(&request, response_tx.clone()).await;
               let response = ResponseMaybeInterleaved::Message(response);
               if let Err(err) = outbound.send(response).await {
-                // TODO
+                tracing::error!(%err, %id, %addr, "connection: failed to send response");
+                break;
               }
             },
             Some(Err(err)) => {
-              // TODO
+              tracing::error!(%err, %id, %addr, "connection: failed to read request");
+              break;
             },
             None => {
-              let _ = state_tx.send(ConnectionState::Disconnected(id));
+              disconnected = true;
+              tracing::info!(%id, %addr, "connection: client disconnected");
               break;
             },
           }
         },
         _ = task_context.wait_for_stop() => {
+          tracing::trace!(%id, %addr, "connection worker stopping");
           break;
         },
       };
     }
 
-    let _ = state_tx.send(ConnectionState::Closed(id));
+    if disconnected {
+      // Client disconnected.
+      let _ = state_tx.send(ConnectionState::Disconnected(id));
+    } else {
+      // Reason for breaking out of loop was unexpected and not due to the
+      // client disconnecting.
+      let _ = state_tx.send(ConnectionState::Closed(id));
+    }
+    tracing::trace!(%id, %addr, "connection worker EOL");
   }
 
 }
@@ -138,6 +162,14 @@ impl ConnectionId {
 
   pub fn generate() -> Self {
     Self(random())
+  }
+
+}
+
+impl fmt::Display for ConnectionId {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{}", self.0)
   }
 
 }

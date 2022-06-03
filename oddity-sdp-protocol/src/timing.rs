@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Clone, Copy)]
 pub enum TimeRange {
   Live,
@@ -17,6 +19,19 @@ impl From<TimeRange> for (u64, u64) {
         start,
         end,
       } => (start, end),
+    }
+  }
+
+}
+
+impl fmt::Display for TimeRange {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      TimeRange::Live
+        => write!(f, "live"),
+      TimeRange::Playback { start, end }
+        => write!(f, "from {} to {}", start, end),
     }
   }
 

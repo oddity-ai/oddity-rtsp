@@ -40,6 +40,7 @@ impl ConnectionManager {
     let (connection_state_tx, connection_state_rx)
       = mpsc::unbounded_channel();
 
+    tracing::trace!("starting connection manager");
     let worker = runtime
       .task()
       .spawn({
@@ -53,6 +54,7 @@ impl ConnectionManager {
         }
       })
       .await;
+    tracing::trace!("started connection manager");
 
     Self {
       connections,
@@ -66,7 +68,6 @@ impl ConnectionManager {
 
   pub async fn stop(&mut self) {
     self.worker.stop().await;
-    // TODO move this into run???
     for (_, mut connection) in self.connections.lock().await.drain() {
       connection.close().await;
     }
@@ -98,9 +99,17 @@ impl ConnectionManager {
         connection_state = connection_state_rx.recv() => {
           match connection_state {
             Some(ConnectionState::Disconnected(connection_id)) => {
+              tracing::trace!(
+                %connection_id,
+                "connection manager: received disconnected",
+              );
               connections.lock().await.remove(&connection_id);
             },
             Some(ConnectionState::Closed(connection_id)) => {
+              tracing::trace!(
+                %connection_id,
+                "connection manager: received closed",
+              );
               connections.lock().await.remove(&connection_id);
             },
             None => {
@@ -109,6 +118,7 @@ impl ConnectionManager {
           }
         },
         _ = task_context.wait_for_stop() => {
+          tracing::trace!("connection manager worker stopping");
           break;
         },
       }

@@ -1,3 +1,11 @@
+use std::fmt;
+
+use bytes::{
+  Bytes,
+  BytesMut,
+  BufMut,
+};
+
 use super::{
   response::Response,
   serialize::Serialize,
@@ -5,12 +13,6 @@ use super::{
     Error,
     Result,
   },
-};
-
-use bytes::{
-  Bytes,
-  BytesMut,
-  BufMut,
 };
 
 pub enum ResponseMaybeInterleaved {
@@ -43,6 +45,19 @@ impl Serialize for ResponseMaybeInterleaved {
 
         Ok(())
       },
+    }
+  }
+
+}
+
+impl fmt::Display for ResponseMaybeInterleaved {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      ResponseMaybeInterleaved::Message(message)
+        => write!(f, "{}", message),
+      ResponseMaybeInterleaved::Interleaved { channel, payload }
+        => write!(f, "interleaved payload over channel: {}, size: {}", channel, payload.len()),
     }
   }
 

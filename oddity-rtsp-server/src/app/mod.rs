@@ -35,15 +35,18 @@ impl App {
       source_manager: SourceManager::start(runtime.clone()).await,
       session_manager: SessionManager::start(runtime.clone()).await,
     };
+    tracing::trace!("registering sources");
     for item in config.media {
+      tracing::info!(%item, "registering source");
       context
         .source_manager
         .register_and_start(
           item.name.as_str(),
           item.path.clone(),
           item.as_media_descriptor()?,
-        ).await;
+        ).await?;
     }
+    tracing::trace!("registered sources");
 
     let context = Arc::new(Mutex::new(context));
     let handler = AppHandler::new(context.clone());
@@ -59,6 +62,11 @@ impl App {
     match *self.state.lock().await {
       AppState::Running => {
         *self.state.lock().await = AppState::Stopping;
+        {
+          let mut context = self.context.lock().await;
+          context.source_manager.stop().await;
+          context.session_manager.stop().await;
+        }
         self.runtime.stop().await;
         *self.state.lock().await = AppState::Stopped;
       },

@@ -1,4 +1,5 @@
 pub mod sdp;
+pub mod video;
 
 use oddity_video::StreamInfo;
 
