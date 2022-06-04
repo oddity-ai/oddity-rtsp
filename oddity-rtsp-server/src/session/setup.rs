@@ -24,6 +24,7 @@ impl SessionSetup {
       .filter(|transport| transport::is_supported(&transport))
       .next()
       .ok_or_else(|| SessionSetupError::TransportNotSupported)?;
+    tracing::trace!(%transport, "calculated transport");
     
     video::RtpMuxer::new()
       .map_err(SessionSetupError::Media)
@@ -31,6 +32,7 @@ impl SessionSetup {
         let rtsp_transport = transport::resolve_transport(&transport, &rtp_muxer);
         let rtp_target = SessionSetupTarget::from_rtsp_transport(&transport, sender)
           .ok_or_else(|| SessionSetupError::DestinationInvalid)?;
+        tracing::debug!(?rtp_target, "calculated target");
 
         Ok(Self {
           rtsp_transport,
@@ -42,16 +44,19 @@ impl SessionSetup {
 
 }
 
+#[derive(Debug)]
 pub enum SessionSetupTarget {
   RtpUdp(SendOverSocket),
   RtpTcp(SendInterleaved),
 }
 
+#[derive(Debug)]
 pub struct SendOverSocket {
   pub rtp_remote: SocketAddr,
   pub rtcp_remote: SocketAddr,
 }
 
+#[derive(Debug)]
 pub struct SendInterleaved {
   pub sender: ResponseSenderTx,
   pub rtp_channel: u8,

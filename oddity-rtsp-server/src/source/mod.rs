@@ -51,6 +51,7 @@ impl Source {
     let (media_info_tx, _) = broadcast::channel(16); // TODO magic constant
     let (packet_tx, _) = broadcast::channel(1024); // TODO magic constant
 
+    tracing::trace!(name, %path, "starting source");
     let worker = runtime
       .task()
       .spawn({
@@ -69,6 +70,7 @@ impl Source {
         }
       })
       .await;
+    tracing::trace!(name, %path, "started source");
 
     Self {
       name: name.to_string(),
@@ -82,7 +84,9 @@ impl Source {
   }
 
   pub async fn stop(&mut self) {
+    tracing::trace!("sending stop signal to source");
     self.worker.stop().await;
+    tracing::trace!("stopped source");
   }
 
   pub fn delegate(&mut self) -> SourceDelegate {
@@ -108,6 +112,7 @@ impl Source {
           break;
         },
         _ = task_context.wait_for_stop() => {
+          tracing::trace!("stopping source");
           break;
         },
       }

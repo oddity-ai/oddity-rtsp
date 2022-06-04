@@ -36,6 +36,7 @@ impl SessionManager {
     let (session_state_tx, session_state_rx) =
       mpsc::unbounded_channel();
 
+    tracing::trace!("starting session manager");
     let worker = runtime
       .task()
       .spawn({
@@ -49,6 +50,7 @@ impl SessionManager {
         }
       })
       .await;
+    tracing::trace!("started session manager");
 
     Self {
       sessions,
@@ -59,7 +61,9 @@ impl SessionManager {
   }
 
   pub async fn stop(&mut self) {
+    tracing::trace!("sending stop signal to session manager");
     self.worker.stop().await;
+    tracing::trace!("session manager stopped");
     for (_, mut session) in self.sessions.lock().await.drain() {
       session.teardown().await;
     }
@@ -84,8 +88,10 @@ impl SessionManager {
           self.runtime.as_ref(),
         ).await
       );
+      tracing::trace!(%session_id, "registered new session");
       Ok(session_id)
     } else {
+      tracing::error!(%session_id, "session with this ID already exists");
       Err(RegisterSessionError::AlreadyRegistered)
     }
   }
@@ -93,11 +99,18 @@ impl SessionManager {
   pub async fn teardown(
     &mut self,
     id: &SessionId,
-  ) {
+  ) -> Option<()> {
     if let Some(session) = self.sessions.lock().await.get_mut(id) {
+      tracing::trace!(session_id=%id, "tearing down session");
       session.teardown().await;
+      tracing::trace!(session_id=%id, "torn down session");
+      Some(())
     } else {
-      // TODO
+      tracing::trace!(
+        session_id=%id,
+        "caller tried to tear down session that does not exist",
+      );
+      None
     }
   }
 
@@ -112,14 +125,16 @@ impl SessionManager {
           match state {
             Some(SessionState::Stopped(session_id)) => {
               let _ = sessions.lock().await.remove(&session_id);
+              tracing::trace!(%session_id, "session manager: received stopped");
             },
             None => {
-              // TODO
+              tracing::error!("session state channel broke unexpectedly");
               break;
             },
           }
         },
         _ = task_context.wait_for_stop() => {
+          tracing::trace!("stopping session manager");
           break;
         },
       }

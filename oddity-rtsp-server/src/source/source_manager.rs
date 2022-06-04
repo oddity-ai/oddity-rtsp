@@ -38,6 +38,7 @@ impl SourceManager {
     let (source_state_tx, source_state_rx) =
       mpsc::unbounded_channel();
 
+    tracing::trace!("starting source manager");
     let worker = runtime
       .task()
       .spawn({
@@ -51,6 +52,7 @@ impl SourceManager {
         }
       })
       .await;
+    tracing::trace!("started source manager");
 
     Self {
       sources,
@@ -61,7 +63,9 @@ impl SourceManager {
   }
 
   pub async fn stop(&mut self) {
+    tracing::trace!("sending stop signal to source manager");
     self.worker.stop().await;
+    tracing::trace!("stopped source manager");
     for (_, mut source) in self.sources.lock().await.drain() {
       source.stop().await;
     }
@@ -79,15 +83,17 @@ impl SourceManager {
         .entry(path.clone()) {
       let _ = entry.insert(
         Source::start(
-          name,
-          path,
+          name.clone(),
+          path.clone(),
           descriptor,
           self.source_state_tx.clone(),
           self.runtime.as_ref(),
         ).await
       );
+      tracing::trace!(name, %path, "registered and started source");
       Ok(())
     } else {
+      tracing::error!(name, %path, "source with given path already registered");
       Err(RegisterSourceError::AlreadyRegistered)
     }
   }
@@ -104,6 +110,7 @@ impl SourceManager {
         ).await
       )
     } else {
+      tracing::trace!(path, "tried to query SDP for source that does not exist");
       None
     }
   }
@@ -113,8 +120,10 @@ impl SourceManager {
     path: &SourcePathRef,
   ) -> Option<SourceDelegate> {
     if let Some(source) = self.sources.lock().await.get_mut(path.into()) {
+      tracing::trace!(path, "creating source delegate for caller");
       Some(source.delegate())
     } else {
+      tracing::trace!(path, "tried to subscribe to source that does not exist");
       None
     }
   }
@@ -129,15 +138,17 @@ impl SourceManager {
         state = source_state_rx.recv() => {
           match state {
             Some(SourceState::Stopped(source_id)) => {
+              tracing::trace!(%source_id, "source manager: received stopped");
               let _ = sources.lock().await.remove(&source_id);
             },
             None => {
-              // TODO
+              tracing::error!("source state channel broke unexpectedly");
               break;
             },
           }
         },
         _ = task_context.wait_for_stop() => {
+          tracing::trace!("stopping source manager");
           break;
         },
       }

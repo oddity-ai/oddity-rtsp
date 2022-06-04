@@ -67,7 +67,9 @@ impl ConnectionManager {
   }
 
   pub async fn stop(&mut self) {
+    tracing::trace!("sending stop signal to connection manager");
     self.worker.stop().await;
+    tracing::trace!("connection manager stopped");
     for (_, mut connection) in self.connections.lock().await.drain() {
       connection.close().await;
     }
@@ -113,6 +115,7 @@ impl ConnectionManager {
               connections.lock().await.remove(&connection_id);
             },
             None => {
+              tracing::error!("connection state channel broke unexpectedly");
               break;
             },
           }

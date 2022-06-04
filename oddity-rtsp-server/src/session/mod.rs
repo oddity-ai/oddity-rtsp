@@ -22,11 +22,6 @@ pub enum SessionState {
 pub type SessionStateTx = mpsc::UnboundedSender<SessionState>;
 pub type SessionStateRx = mpsc::UnboundedReceiver<SessionState>;
 
-// TODO
-// tracing
-// - session
-// - source
-
 pub struct Session {
   worker: Task,
 }
@@ -40,18 +35,23 @@ impl Session {
     state_tx: SessionStateTx,
     runtime: &Runtime,
   ) -> Self {
+    tracing::trace!(%id, "starting session");
     let worker = runtime
       .task()
-      .spawn(|task_context| {
-        Self::run(
-          id,
-          source_delegate,
-          setup,
-          state_tx,
-          task_context,
-        )
+      .spawn({
+        let id = id.clone();
+        |task_context| {
+          Self::run(
+            id,
+            source_delegate,
+            setup,
+            state_tx,
+            task_context,
+          )
+        }
       })
       .await;
+    tracing::trace!(%id, "started session");
 
     Self {
       worker,
@@ -59,7 +59,9 @@ impl Session {
   }
 
   pub async fn teardown(&mut self) {
+    tracing::trace!("sending teardown signal to session");
     let _ = self.worker.stop().await;
+    tracing::trace!("session torn down");
   }
 
   async fn run(
@@ -75,6 +77,7 @@ impl Session {
     loop {
       select! {
         _ = task_context.wait_for_stop() => {
+          tracing::trace!("tearing down session");
           break;
         },
       }
