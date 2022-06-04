@@ -1,4 +1,5 @@
 use std::fmt;
+use std::error;
 
 use oddity_video::{Reader, RtpMuxer};
 use oddity_sdp_protocol::{
@@ -94,6 +95,7 @@ pub async fn create(
   Ok(sdp)
 }
 
+#[derive(Debug)]
 pub enum SdpError {
   CodecNotSupported,
   Media(oddity_video::Error),
@@ -109,3 +111,5 @@ impl fmt::Display for SdpError {
   }
 
 }
+
+impl error::Error for SdpError {}

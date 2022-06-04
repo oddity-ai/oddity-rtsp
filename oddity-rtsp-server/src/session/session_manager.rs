@@ -1,4 +1,5 @@
 use std::fmt;
+use std::error;
 use std::sync::Arc;
 use std::collections::{HashMap, hash_map::Entry};
 
@@ -143,6 +144,7 @@ impl SessionManager {
   
 }
 
+#[derive(Debug)]
 pub enum RegisterSessionError {
   AlreadyRegistered,
 }
@@ -156,3 +158,5 @@ impl fmt::Display for RegisterSessionError {
   }
 
 }
+
+impl error::Error for RegisterSessionError {}

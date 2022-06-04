@@ -1,4 +1,5 @@
 use std::fmt;
+use std::error;
 use std::net::SocketAddr;
 
 use oddity_video as video;
@@ -110,6 +111,7 @@ impl SessionSetupTarget {
   }
 }
 
+#[derive(Debug)]
 pub enum SessionSetupError {
   TransportNotSupported,
   DestinationInvalid,
@@ -127,3 +129,5 @@ impl fmt::Display for SessionSetupError {
   }
 
 }
+
+impl error::Error for SessionSetupError {}

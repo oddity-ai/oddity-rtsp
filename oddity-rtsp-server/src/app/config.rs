@@ -1,3 +1,4 @@
+use std::fmt;
 use std::error::Error;
 use std::path::{PathBuf, Path};
 
@@ -42,11 +43,36 @@ impl Item {
 
 }
 
+impl fmt::Display for Item {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(
+      f, "{} ({}): {} ({})",
+      self.name,
+      self.path,
+      self.source,
+      self.kind,
+    )
+  }
+
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaKind {
   File,
   Stream,
+}
+
+impl fmt::Display for MediaKind {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      MediaKind::File   => write!(f, "file"),
+      MediaKind::Stream => write!(f, "live stream"),
+    }
+  }
+
 }
 
 impl Default for AppConfig {

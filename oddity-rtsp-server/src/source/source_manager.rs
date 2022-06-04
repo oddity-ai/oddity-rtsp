@@ -1,4 +1,5 @@
 use std::fmt;
+use std::error;
 use std::sync::Arc;
 use std::collections::{HashMap, hash_map::Entry};
 
@@ -157,6 +158,7 @@ impl SourceManager {
   
 }
 
+#[derive(Debug)]
 pub enum RegisterSourceError {
   AlreadyRegistered,
 }
@@ -170,3 +172,5 @@ impl fmt::Display for RegisterSourceError {
   }
 
 }
+
+impl error::Error for RegisterSourceError {}

@@ -51,7 +51,12 @@ impl App {
     let context = Arc::new(Mutex::new(context));
     let handler = AppHandler::new(context.clone());
     Ok(Self {
-      server: Server::start(handler, runtime.clone()).await,
+      server: Server::start(
+        config.server.host.parse()?,
+        config.server.port,
+        handler,
+        runtime.clone(),
+      ).await?,
       state: Arc::new(Mutex::new(AppState::Running)),
       context,
       runtime,
