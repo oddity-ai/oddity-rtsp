@@ -44,5 +44,5 @@ impl From<MediaDescriptor> for Locator {
 
 #[derive(Clone)]
 pub struct MediaInfo {
-  streams: Vec<StreamInfo>,
+  pub streams: Vec<StreamInfo>,
 }

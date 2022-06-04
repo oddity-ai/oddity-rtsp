@@ -113,7 +113,7 @@ impl AppHandler {
         };
         tracing::trace!(path=request.path(), ?transport, "resolved transport");
 
-        let source_delegate = match self
+        let mut source_delegate = match self
             .use_context()
             .await
             .source_manager
@@ -126,10 +126,22 @@ impl AppHandler {
         };
         tracing::trace!(path=request.path(), "acquired source delegate");
 
+        let media_info = match source_delegate.query_media_info().await {
+          Some(media_info) => media_info,
+          None => {
+            tracing::trace!(
+              path=request.path(),
+              "failed to query media info from source",
+            );
+            return reply_internal_server_error(request);
+          },
+        };
+
         let session_setup = match SessionSetup::from_rtsp_candidate_transports(
           transport,
+          media_info,
           responder,
-        ) {
+        ).await {
           Ok(session_setup) => session_setup,
           Err(SessionSetupError::TransportNotSupported) |
           Err(SessionSetupError::DestinationInvalid) => {
@@ -168,7 +180,7 @@ impl AppHandler {
       },
       Method::Play => {
         tracing::trace!("handling PLAY request");
-        // TODO
+        // TODO!
         unimplemented!();
       },
       Method::Pause => {
@@ -181,7 +193,7 @@ impl AppHandler {
       },
       Method::Teardown => {
         tracing::trace!("handling TEARDOWN request");
-        // TODO
+        // TODO!
         unimplemented!();
       },
       /* Invalid */

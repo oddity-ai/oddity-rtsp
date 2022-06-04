@@ -26,7 +26,7 @@ pub async fn mux(
 }
 
 pub async fn finish(
-  rtp_muxer: &'static mut RtpMuxer,
+  mut rtp_muxer: RtpMuxer,
 ) -> Result<video::RtpBuf> {
   task::spawn_blocking(move || {
       rtp_muxer.finish()

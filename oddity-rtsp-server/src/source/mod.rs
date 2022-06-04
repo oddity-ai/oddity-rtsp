@@ -39,6 +39,13 @@ pub struct Source {
 }
 
 impl Source {
+  /// Any more than 16 stream info messages on the queue probably means
+  /// something is really wrong and the server is overloaded.
+  const MAX_QUEUED_MEDIA_INFO: usize = 16;
+
+  /// Any more than 1024 packets queued probably indicates the server is
+  /// terribly overloaded/broken.
+  const MAX_QUEUED_PACKETS: usize = 1024;
 
   pub async fn start(
     name: &str,
@@ -48,8 +55,8 @@ impl Source {
     runtime: &Runtime,
   ) -> Self {
     let (control_tx, control_rx) = mpsc::unbounded_channel();
-    let (media_info_tx, _) = broadcast::channel(16); // TODO magic constant
-    let (packet_tx, _) = broadcast::channel(1024); // TODO magic constant
+    let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_MEDIA_INFO);
+    let (packet_tx, _) = broadcast::channel(Self::MAX_QUEUED_PACKETS);
 
     tracing::trace!(name, %path, "starting source");
     let worker = runtime
@@ -105,7 +112,7 @@ impl Source {
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
   ) {
-    // TODO implement
+    // TODO! implement
     loop {
       select! {
         _ = control_rx.recv() => {

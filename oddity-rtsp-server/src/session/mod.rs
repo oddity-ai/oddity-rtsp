@@ -6,14 +6,19 @@ pub mod setup;
 use std::fmt;
 
 use tokio::select;
+use tokio::net;
 use tokio::sync::mpsc;
 
 use rand::Rng;
 
+use oddity_rtsp_protocol as rtsp;
+use oddity_video as video;
+
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::source::SourceDelegate;
-use crate::session::setup::SessionSetup;
+use crate::session::setup::{SessionSetup, SessionSetupTarget};
+use crate::media::video::rtp_muxer;
 
 pub enum SessionState {
   Stopped(SessionId),
@@ -69,21 +74,154 @@ impl Session {
     source_delegate: SourceDelegate,
     setup: SessionSetup,
     state_tx: SessionStateTx,
+    task_context: TaskContext,
+  ) {
+    let mut muxer = setup.rtp_muxer;
+
+    match setup.rtp_target {
+      SessionSetupTarget::RtpUdp(target) => {
+        Self::run_udp(
+          id.clone(),
+          source_delegate,
+          &mut muxer,
+          target,
+          task_context,
+        ).await;
+      },
+      SessionSetupTarget::RtpTcp(target) => {
+        Self::run_tcp(
+          id.clone(),
+          source_delegate,
+          &mut muxer,
+          target,
+          task_context,
+        ).await;
+      },
+    };
+
+    // Throw away possible last RTP buffer (we don't care about
+    // it since this is real-time and there's no "trailer".
+    let _ = rtp_muxer::finish(muxer).await;
+
+    let _ = state_tx.send(SessionState::Stopped(id));
+  }
+
+  async fn run_udp(
+    id: SessionId,
+    mut source_delegate: SourceDelegate,
+    muxer: &mut video::RtpMuxer,
+    target: setup::SendOverSocket,
     mut task_context: TaskContext,
   ) {
-    // TODO implement
-    // TODO if the connection_sender_tx (inside setup) dies the it is
-    // similar to transport being closed (underlying connection died)
+    let socket_rtp = match net::UdpSocket::bind("0.0.0.0:0").await {
+      Ok(socket) => socket,
+      Err(err) => {
+        tracing::error!(%id, %err, "failed to bind UDP socket");
+        return;
+      },
+    };
+
+    let socket_rtcp = match net::UdpSocket::bind("0.0.0.0:0").await {
+      Ok(socket) => socket,
+      Err(err) => {
+        tracing::error!(%id, %err, "failed to bind UDP socket");
+        return;
+      },
+    };
+
     loop {
       select! {
+        packet = source_delegate.recv_packet() => {
+          match packet {
+            Some(packet) => {
+              let packet = match muxer.mux(packet) {
+                Ok(packet) => packet,
+                Err(err) => {
+                  tracing::error!(%id, %err, "failed to mux packet");
+                  break;
+                },
+              };
+
+              let sent = match packet {
+                video::RtpBuf::Rtp(buf) => {
+                  socket_rtp.send_to(&buf, target.rtp_remote).await
+                },
+                video::RtpBuf::Rtcp(buf) => {
+                  socket_rtp.send_to(&buf, target.rtcp_remote).await
+                }
+              };
+
+              if let Err(err) = sent {
+                tracing::error!(%id, %err, "socket failed");
+                break;
+              }
+            },
+            None => {
+              tracing::error!(%id, "source broken");
+              break;
+            },
+          }
+        },
         _ = task_context.wait_for_stop() => {
           tracing::trace!("tearing down session");
           break;
         },
       }
     }
+  }
 
-    let _ = state_tx.send(SessionState::Stopped(id));
+  async fn run_tcp(
+    id: SessionId,
+    mut source_delegate: SourceDelegate,
+    muxer: &mut video::RtpMuxer,
+    target: setup::SendInterleaved,
+    mut task_context: TaskContext,
+  ) {
+    loop {
+      select! {
+        packet = source_delegate.recv_packet() => {
+          match packet {
+            Some(packet) => {
+              let packet = match muxer.mux(packet) {
+                Ok(packet) => packet,
+                Err(err) => {
+                  tracing::error!(%id, %err, "failed to mux packet");
+                  break;
+                },
+              };
+
+              let rtsp_interleaved_message = match packet {
+                video::RtpBuf::Rtp(payload) => {
+                  rtsp::ResponseMaybeInterleaved::Interleaved {
+                    channel: target.rtp_channel,
+                    payload: payload.into(),
+                  }
+                },
+                video::RtpBuf::Rtcp(payload) => {
+                  rtsp::ResponseMaybeInterleaved::Interleaved {
+                    channel: target.rtcp_channel,
+                    payload: payload.into(),
+                  }
+                },
+              };
+
+              if let Err(err) = target.sender.send(rtsp_interleaved_message) {
+                tracing::trace!(%id, %err, "underlying connection closed");
+                break;
+              }
+            }
+            None => {
+              tracing::error!(%id, "source broken");
+              break;
+            },
+          }
+        },
+        _ = task_context.wait_for_stop() => {
+          tracing::trace!("tearing down session");
+          break;
+        },
+      }
+    }
   }
 
 }

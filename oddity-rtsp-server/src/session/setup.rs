@@ -7,17 +7,20 @@ use oddity_rtsp_protocol as rtsp;
 
 use crate::net::connection::ResponseSenderTx;
 use crate::session::transport;
+use crate::media::video::rtp_muxer;
+use crate::media::MediaInfo;
 
 pub struct SessionSetup {
-  rtsp_transport: rtsp::Transport,
-  rtp_muxer: video::RtpMuxer,
-  rtp_target: SessionSetupTarget,
+  pub rtsp_transport: rtsp::Transport,
+  pub rtp_muxer: video::RtpMuxer,
+  pub rtp_target: SessionSetupTarget,
 }
 
 impl SessionSetup {
 
-  pub fn from_rtsp_candidate_transports(
+  pub async fn from_rtsp_candidate_transports(
     candidate_transports: impl IntoIterator<Item=rtsp::Transport>,
+    media_info: MediaInfo,
     sender: ResponseSenderTx,
   ) -> Result<Self, SessionSetupError> {
     let transport = candidate_transports
@@ -27,13 +30,18 @@ impl SessionSetup {
       .ok_or_else(|| SessionSetupError::TransportNotSupported)?;
     tracing::trace!(%transport, "calculated transport");
     
-    video::RtpMuxer::new()
+    rtp_muxer::make_rtp_muxer().await
       .map_err(SessionSetupError::Media)
-      .and_then(|rtp_muxer| {
+      .and_then(|mut rtp_muxer| {
         let rtsp_transport = transport::resolve_transport(&transport, &rtp_muxer);
         let rtp_target = SessionSetupTarget::from_rtsp_transport(&transport, sender)
           .ok_or_else(|| SessionSetupError::DestinationInvalid)?;
         tracing::debug!(?rtp_target, "calculated target");
+
+        for stream_info in media_info.streams {
+          rtp_muxer = rtp_muxer.with_stream(stream_info)
+            .map_err(SessionSetupError::Media)?;
+        }
 
         Ok(Self {
           rtsp_transport,
