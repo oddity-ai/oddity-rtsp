@@ -4,9 +4,12 @@ use tokio::select;
 use tokio::sync::mpsc;
 use tokio::sync::broadcast;
 
+use oddity_video as video;
+
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
-use crate::media::{self, MediaDescriptor};
+use crate::media::{self, MediaDescriptor, MediaInfo};
+use crate::media::video::reader;
 
 pub enum SourceState {
   Stopped(SourcePath),
@@ -53,8 +56,15 @@ impl Source {
     descriptor: MediaDescriptor,
     state_tx: SourceStateTx,
     runtime: &Runtime,
-  ) -> Self {
+  ) -> Result<Self, video::Error> {
+    tracing::trace!(%descriptor, "initializing video reader");
+    let reader = reader::make_reader(descriptor.clone().into()).await?;
+    tracing::trace!(%descriptor, "initialized video reader");
+    let media_info = MediaInfo::from_reader_best_video_stream(&reader)?;
+
     let (control_tx, control_rx) = mpsc::unbounded_channel();
+    // TODO media info broadcaster could be problem because receivers AREN'T
+    // always listening (should they, or should this be some other channel ??)
     let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_MEDIA_INFO);
     let (packet_tx, _) = broadcast::channel(Self::MAX_QUEUED_PACKETS);
 
@@ -68,6 +78,8 @@ impl Source {
         move |task_context| {
           Self::run(
             path,
+            reader,
+            media_info,
             control_rx,
             state_tx,
             media_info_tx,
@@ -79,7 +91,7 @@ impl Source {
       .await;
     tracing::trace!(name, %path, "started source");
 
-    Self {
+    Ok(Self {
       name: name.to_string(),
       path,
       descriptor,
@@ -87,7 +99,7 @@ impl Source {
       media_info_tx,
       packet_tx,
       worker,
-    }
+    })
   }
 
   pub async fn stop(&mut self) {
@@ -106,17 +118,30 @@ impl Source {
 
   async fn run(
     path: SourcePath,
+    reader: video::Reader,
+    media_info: MediaInfo,
     mut control_rx: SourceControlRx,
     state_tx: SourceStateTx,
     media_info_tx: SourceMediaInfoTx,
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
   ) {
-    // TODO! implement
     loop {
+      // TODO! implement reading here... it's a bit of a problem since reader::read is not
+      // cancellation safe but i'm not sure how to select on it correctly anyway...
       select! {
-        _ = control_rx.recv() => {
-          break;
+        message = control_rx.recv() => {
+          match message {
+            Some(SourceControlMessage::StreamInfo) => {
+              if let Err(err) = media_info_tx.send(media_info.clone()) {
+                tracing::warn!(%err, "failed to broadcast media info");
+              }
+            },
+            None => {
+              tracing::error!(%path, "source control channel broke unexpectedly");
+              break;
+            },
+          };
         },
         _ = task_context.wait_for_stop() => {
           tracing::trace!("stopping source");

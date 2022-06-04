@@ -8,7 +8,9 @@ pub use oddity_video::Packet;
 use std::path::PathBuf;
 use std::fmt;
 
-use oddity_video::{Locator, Url};
+use oddity_video::{Reader, Locator, Url, Error};
+
+type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone)]
 pub enum MediaDescriptor {
@@ -45,4 +47,15 @@ impl From<MediaDescriptor> for Locator {
 #[derive(Clone)]
 pub struct MediaInfo {
   pub streams: Vec<StreamInfo>,
+}
+
+impl MediaInfo {
+
+  pub fn from_reader_best_video_stream(reader: &Reader) -> Result<Self> {
+    let best_video_stream_index = reader.best_video_stream_index()?;
+    Ok(Self {
+      streams: vec![reader.stream_info(best_video_stream_index)?],
+    })
+  }
+
 }

@@ -30,6 +30,7 @@ impl SessionSetup {
       .ok_or_else(|| SessionSetupError::TransportNotSupported)?;
     tracing::trace!(%transport, "calculated transport");
     
+    tracing::trace!("initializing muxer");
     rtp_muxer::make_rtp_muxer().await
       .map_err(SessionSetupError::Media)
       .and_then(|mut rtp_muxer| {
@@ -39,6 +40,7 @@ impl SessionSetup {
         tracing::debug!(?rtp_target, "calculated target");
 
         for stream_info in media_info.streams {
+          tracing::trace!(stream_index=stream_info.index, "adding stream to muxer");
           rtp_muxer = rtp_muxer.with_stream(stream_info)
             .map_err(SessionSetupError::Media)?;
         }

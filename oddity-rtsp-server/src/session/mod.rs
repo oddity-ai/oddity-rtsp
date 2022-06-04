@@ -80,6 +80,7 @@ impl Session {
 
     match setup.rtp_target {
       SessionSetupTarget::RtpUdp(target) => {
+        tracing::trace!(%id, "starting rtp over udp loop");
         Self::run_udp(
           id.clone(),
           source_delegate,
@@ -89,6 +90,7 @@ impl Session {
         ).await;
       },
       SessionSetupTarget::RtpTcp(target) => {
+        tracing::trace!(%id, "starting rtp over tcp (interleaved) loop");
         Self::run_tcp(
           id.clone(),
           source_delegate,
@@ -99,9 +101,11 @@ impl Session {
       },
     };
 
+    tracing::trace!(%id, "finishing muxer");
     // Throw away possible last RTP buffer (we don't care about
     // it since this is real-time and there's no "trailer".
     let _ = rtp_muxer::finish(muxer).await;
+    tracing::trace!(%id, "finished muxer");
 
     let _ = state_tx.send(SessionState::Stopped(id));
   }

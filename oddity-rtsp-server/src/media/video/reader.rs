@@ -15,3 +15,14 @@ pub async fn make_reader(
     .await
     .unwrap()
 }
+
+pub async fn read(
+  reader: &'static mut Reader,
+  stream_index: usize,
+) -> Result<video::Packet> {
+  task::spawn_blocking(move || {
+      reader.read(stream_index)
+    })
+    .await
+    .unwrap()
+}
