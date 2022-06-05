@@ -1,62 +1,91 @@
-use std::net::{
-  ToSocketAddrs,
-  TcpListener,
-};
-use std::error::Error;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+use std::net::IpAddr;
 
-use concurrency::ServicePool;
+use tokio::select;
+use tokio::net;
 
-use crate::media::{
-  MediaController,
-  SharedMediaController,
-};
+use crate::runtime::Runtime;
+use crate::runtime::task_manager::{Task, TaskContext};
+use crate::net::handler::Handler;
+use crate::net::connection_manager::ConnectionManager;
 
-use super::conn::Connection;
+type Result<T> = std::result::Result<T, std::io::Error>;
 
-pub struct Server<A: ToSocketAddrs + 'static> {
-  addrs: A,
-  media: SharedMediaController,
-  connections: ServicePool,
+pub struct Server {
+  worker: Task,
 }
 
-impl<A: ToSocketAddrs + 'static> Server<A> {
+impl Server {
 
-  pub fn new(
-    addrs: A,
-    media: MediaController,
-  ) -> Self {
-    Self {
-      addrs,
-      media: Arc::new(
-        Mutex::new(
-          media
+  pub async fn start(
+    host: IpAddr,
+    port: u16,
+    handler: Handler,
+    runtime: Arc<Runtime>,
+  ) -> Result<Self> {
+    tracing::trace!(%host, port, "starting server");
+    let listener = match net::TcpListener::bind((host, port)).await {
+      Ok(listener) => listener,
+      Err(err) => {
+        tracing::error!(%err, %host, port, "failed to listen for connections");
+        return Err(err);
+      },
+    };
+    tracing::info!(%host, port, "server listening for incoming connections");
+
+    let worker = runtime
+      .task()
+      .spawn({
+        let runtime = runtime.clone();
+          move |task_context| Self::run(
+          listener,
+          handler,
+          runtime,
+          task_context,
         )
-      ),
-      connections: ServicePool::new(),
-    }
+      })
+      .await;
+    tracing::trace!(%host, port, "started server");
+
+    Ok(Self {
+      worker,
+    })
   }
 
-  pub fn run(
-    mut self
-  ) -> Result<(), Box<dyn Error>> {
-    let listener = TcpListener::bind(&self.addrs)?;
-    loop {
-      let (socket, addr) = listener.accept()?;
-      tracing::trace!(%addr, "accepted client");
+  pub async fn stop(&mut self) {
+    tracing::trace!("sending stop signal to server");
+    self.worker.stop().await;
+    tracing::trace!("server stopped");
+  }
 
-      self.connections.spawn({
-        let media = self.media.clone();
-        move |stop_rx| {
-          Connection::new(
-              socket,
-              &media,
-              stop_rx,
-            )
-            .run();
-        }
-      });
+  async fn run(
+    listener: net::TcpListener,
+    handler: Handler,
+    runtime: Arc<Runtime>,
+    mut task_context: TaskContext,
+  ) {
+    let mut connection_manager = ConnectionManager::start(handler, runtime).await;
+    loop {
+      select! {
+        incoming = listener.accept() => {
+          match incoming {
+            Ok((incoming, peer_addr)) => {
+              tracing::trace!(%peer_addr, "accepted client");
+              connection_manager.spawn(incoming).await;
+            },
+            Err(err) => {
+              tracing::error!(%err, "failed to accept connection");
+            },
+          }
+        },
+        _ = task_context.wait_for_stop() => {
+          tracing::trace!("server stopping");
+          break;
+        },
+      }
     }
+
+    connection_manager.stop().await;
   }
 
 }

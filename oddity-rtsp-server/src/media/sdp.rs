@@ -1,20 +1,18 @@
-use oddity_video::{
-  Reader,
-  RtpMuxer,
-};
+use std::fmt;
+use std::error;
 
 use oddity_sdp_protocol::{
-  Sdp,
   TimeRange,
   Kind,
   Protocol,
   CodecInfo,
 };
 
-use super::{
-  Descriptor,
-  Error,
-};
+use crate::media::MediaDescriptor;
+use crate::media::video::reader;
+use crate::media::video::rtp_muxer;
+
+pub use oddity_sdp_protocol::Sdp;
 
 /// Create a new SDP description for the given media descriptor. The
 /// SDP contents can be used over RTSP when the client requested a
@@ -27,30 +25,35 @@ use super::{
 /// 
 /// * `name` - Name of stream.
 /// * `descriptor` - Media stream descriptor.
-pub fn create(
-  name: String,
-  descriptor: &Descriptor,
-) -> Result<Sdp, Error> {
+pub async fn create(
+  name: &str,
+  descriptor: &MediaDescriptor,
+) -> Result<Sdp, SdpError> {
   const ORIGIN_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
   const TARGET_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
   const TARGET_DUMMY_PORT: u16 = 0;
 
-  let reader = Reader::new(&descriptor.clone().into())
-    .map_err(Error::Media)?;
+  tracing::trace!("sdp: initializing reader");
+  let reader = reader::make_reader(descriptor.clone().into()).await
+    .map_err(SdpError::Media)?;
   let best_video_stream = reader.best_video_stream_index()
-    .map_err(Error::Media)?;
+    .map_err(SdpError::Media)?;
+  tracing::trace!(best_video_stream, "sdp: initialized reader");
 
   let time_range = match descriptor {
-    Descriptor::File(_)
+    MediaDescriptor::File(_)
       => unimplemented!() /* TODO */,
-    Descriptor::Stream(_)
+    MediaDescriptor::Stream(_)
       => TimeRange::Live,
   };
+  tracing::trace!(%time_range, "sdp: determined time range");
 
-  let muxer = RtpMuxer::new()
+  tracing::trace!("sdp: initializing muxer");
+  let muxer = rtp_muxer::make_rtp_muxer().await
     .and_then(|muxer|
       muxer.with_stream(reader.stream_info(best_video_stream)?))
-    .map_err(Error::Media)?;
+    .map_err(SdpError::Media)?;
+  tracing::trace!("sdp: initialized muxer");
 
   let (sps, pps) = muxer
     .parameter_sets_h264()
@@ -60,7 +63,8 @@ pub fn create(
     // the stream in that case, and return `CodecNotSupported`.
     .filter_map(Result::ok)
     .next()
-    .ok_or_else(|| Error::CodecNotSupported)?;
+    .ok_or_else(|| SdpError::CodecNotSupported)?;
+  tracing::trace!("sdp: found SPS and PPS");
 
   // Since the previous call to `parameter_sets_h264` can only
   // return a result if the underlying stream is H.264, we can
@@ -73,7 +77,7 @@ pub fn create(
 
   let sdp = Sdp::new(
     ORIGIN_DUMMY_HOST.into(),
-    name,
+    name.to_string(),
     TARGET_DUMMY_HOST.into(),
     time_range
   );
@@ -86,5 +90,25 @@ pub fn create(
       codec_info,
     );
 
+  tracing::trace!(%sdp, "generated sdp");
   Ok(sdp)
 }
+
+#[derive(Debug)]
+pub enum SdpError {
+  CodecNotSupported,
+  Media(oddity_video::Error),
+}
+
+impl fmt::Display for SdpError {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      SdpError::CodecNotSupported => write!(f, "codec not supported"),
+      SdpError::Media(error) => write!(f, "media error: {}", error),
+    }
+  }
+
+}
+
+impl error::Error for SdpError {}
