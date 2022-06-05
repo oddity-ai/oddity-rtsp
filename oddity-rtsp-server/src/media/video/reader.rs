@@ -1,5 +1,8 @@
 //! Async wrapper functions for [`oddity_video::Reader`].
 
+use futures::Stream;
+use futures::stream;
+
 use tokio::task;
 
 use oddity_video::{self as video, Reader};
@@ -16,13 +19,19 @@ pub async fn make_reader(
     .unwrap()
 }
 
-pub async fn read(
-  reader: &'static mut Reader,
+pub fn into_stream(
+  reader: Reader,
   stream_index: usize,
-) -> Result<video::Packet> {
-  task::spawn_blocking(move || {
-      reader.read(stream_index)
-    })
-    .await
-    .unwrap()
+) -> impl Stream<Item=Result<video::Packet>> {
+  stream::unfold(reader, move |mut local_reader| async move {
+    // TODO maybe map end-of-stream to `None` here and handle
+    // appropriately
+    let (packet, reader) = task::spawn_blocking(move || {
+        let packet = local_reader.read(stream_index);
+        (packet, local_reader)
+      })
+      .await
+      .unwrap();
+    Some((packet, reader))
+  })
 }

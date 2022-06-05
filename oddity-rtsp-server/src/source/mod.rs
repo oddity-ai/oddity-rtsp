@@ -1,8 +1,9 @@
 pub mod source_manager;
 
-use tokio::select;
+use tokio::{select, pin};
 use tokio::sync::mpsc;
 use tokio::sync::broadcast;
+use tokio_stream::StreamExt;
 
 use oddity_video as video;
 
@@ -126,15 +127,46 @@ impl Source {
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
   ) {
+    // TODO! implement retry mechanism
+
+    let stream_index = match media_info.streams.first() {
+      Some(stream) => {
+        tracing::trace!(%path, stream_index=stream.index, "selected video stream");
+        stream.index
+      },
+      None => {
+        tracing::error!(%path, "recevied media info without stream");
+        return;
+      },
+    };
+
+    let reader = reader::into_stream(reader, stream_index);
+    pin!(reader);
+
     loop {
-      // TODO! implement reading here... it's a bit of a problem since reader::read is not
-      // cancellation safe but i'm not sure how to select on it correctly anyway...
       select! {
+        packet = reader.next() => {
+          match packet {
+            Some(Ok(packet)) => {
+              if let Err(err) = packet_tx.send(packet.clone()) {
+                tracing::warn!(%path, %err, "failed to broadcast packet");
+              }
+            },
+            Some(Err(err)) => {
+              tracing::error!(%path, %err, "failed to read video stream");
+              break;
+            },
+            None => {
+              tracing::info!(%path, "video stream ended");
+              break;
+            },
+          };
+        },
         message = control_rx.recv() => {
           match message {
             Some(SourceControlMessage::StreamInfo) => {
               if let Err(err) = media_info_tx.send(media_info.clone()) {
-                tracing::warn!(%err, "failed to broadcast media info");
+                tracing::warn!(%path, %err, "failed to broadcast media info");
               }
             },
             None => {
@@ -144,7 +176,7 @@ impl Source {
           };
         },
         _ = task_context.wait_for_stop() => {
-          tracing::trace!("stopping source");
+          tracing::trace!(%path, "stopping source");
           break;
         },
       }

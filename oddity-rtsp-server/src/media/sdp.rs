@@ -1,7 +1,6 @@
 use std::fmt;
 use std::error;
 
-use oddity_video::{Reader, RtpMuxer};
 use oddity_sdp_protocol::{
   TimeRange,
   Kind,

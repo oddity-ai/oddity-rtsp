@@ -7,6 +7,8 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
+use oddity_video::Error as MediaError;
+
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::media::sdp::{self, Sdp, SdpError};
@@ -84,12 +86,14 @@ impl SourceManager {
         .entry(path.clone()) {
       let _ = entry.insert(
         Source::start(
-          name.clone(),
-          path.clone(),
-          descriptor,
-          self.source_state_tx.clone(),
-          self.runtime.as_ref(),
-        ).await
+            name.clone(),
+            path.clone(),
+            descriptor,
+            self.source_state_tx.clone(),
+            self.runtime.as_ref(),
+          )
+          .await
+          .map_err(RegisterSourceError::Media)?
       );
       tracing::trace!(name, %path, "registered and started source");
       Ok(())
@@ -161,13 +165,17 @@ impl SourceManager {
 #[derive(Debug)]
 pub enum RegisterSourceError {
   AlreadyRegistered,
+  Media(MediaError),
 }
 
 impl fmt::Display for RegisterSourceError {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      RegisterSourceError::AlreadyRegistered => write!(f, "already registered"),
+      RegisterSourceError::AlreadyRegistered
+        => write!(f, "already registered"),
+      RegisterSourceError::Media(err)
+        => write!(f, "media error: {}", err),
     }
   }
 
