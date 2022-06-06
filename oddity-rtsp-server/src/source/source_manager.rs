@@ -14,6 +14,7 @@ use crate::runtime::task_manager::{Task, TaskContext};
 use crate::media::sdp::{self, Sdp, SdpError};
 use crate::media::MediaDescriptor;
 use crate::source::{
+  self,
   Source,
   SourceDelegate,
   SourcePath,
@@ -84,6 +85,7 @@ impl SourceManager {
         .sources
         .lock().await
         .entry(path.clone()) {
+      let path = source::normalize_path(path);
       let _ = entry.insert(
         Source::start(
             name.clone(),

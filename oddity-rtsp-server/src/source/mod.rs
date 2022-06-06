@@ -214,7 +214,7 @@ impl SourceDelegate {
 pub type SourcePath = String;
 pub type SourcePathRef = str;
 
-fn normalize_path(path: SourcePath) -> SourcePath {
+pub fn normalize_path(path: SourcePath) -> SourcePath {
   if path.starts_with("/") {
     path
   } else {
