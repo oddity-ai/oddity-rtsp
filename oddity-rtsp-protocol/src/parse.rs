@@ -5,7 +5,6 @@ use super::{
     Message,
     Version,
     StatusCode,
-    Method,
     Uri,
     Headers,
     Bytes,
@@ -378,19 +377,17 @@ fn parse_header(line: &str) -> Result<(String, String)> {
 #[cfg(test)]
 mod tests {
 
-  use bytes::BytesMut;
+  use bytes::{Bytes, BytesMut};
 
-  use super::{
+  use crate::{
     Request,
     RequestParser,
     ResponseParser,
     Status,
     Version,
     Method,
-    Bytes,
+    StatusCategory,
   };
-
-  use crate::StatusCategory;
 
   #[test]
   fn parse_options_request() {

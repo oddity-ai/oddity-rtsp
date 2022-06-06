@@ -76,7 +76,7 @@ impl Session {
     state_tx: SessionStateTx,
     task_context: TaskContext,
   ) {
-    let mut muxer = setup.rtp_muxer;
+    let muxer = setup.rtp_muxer;
 
     match setup.rtp_target {
       SessionSetupTarget::RtpUdp(target) => {
@@ -84,7 +84,7 @@ impl Session {
         Self::run_udp(
           id.clone(),
           source_delegate,
-          &mut muxer,
+          muxer,
           target,
           task_context,
         ).await;
@@ -94,18 +94,12 @@ impl Session {
         Self::run_tcp(
           id.clone(),
           source_delegate,
-          &mut muxer,
+          muxer,
           target,
           task_context,
         ).await;
       },
     };
-
-    tracing::trace!(%id, "finishing muxer");
-    // Throw away possible last RTP buffer (we don't care about
-    // it since this is real-time and there's no "trailer".
-    let _ = rtp_muxer::finish(muxer).await;
-    tracing::trace!(%id, "finished muxer");
 
     let _ = state_tx.send(SessionState::Stopped(id));
   }
@@ -113,14 +107,14 @@ impl Session {
   async fn run_udp(
     id: SessionId,
     mut source_delegate: SourceDelegate,
-    muxer: &mut video::RtpMuxer,
+    mut muxer: video::RtpMuxer,
     target: setup::SendOverSocket,
     mut task_context: TaskContext,
   ) {
     let socket_rtp = match net::UdpSocket::bind("0.0.0.0:0").await {
       Ok(socket) => socket,
       Err(err) => {
-        tracing::error!(%id, %err, "failed to bind UDP socket");
+        tracing::error!(%id, %err, "failed to bind UDP socket for RTP");
         return;
       },
     };
@@ -128,7 +122,7 @@ impl Session {
     let socket_rtcp = match net::UdpSocket::bind("0.0.0.0:0").await {
       Ok(socket) => socket,
       Err(err) => {
-        tracing::error!(%id, %err, "failed to bind UDP socket");
+        tracing::error!(%id, %err, "failed to bind UDP socket for RTCP");
         return;
       },
     };
@@ -138,7 +132,10 @@ impl Session {
         packet = source_delegate.recv_packet() => {
           match packet {
             Some(packet) => {
-              let packet = match muxer.mux(packet) {
+              let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
+              muxer = muxed;
+
+              let packet = match packet {
                 Ok(packet) => packet,
                 Err(err) => {
                   tracing::error!(%id, %err, "failed to mux packet");
@@ -151,7 +148,7 @@ impl Session {
                   socket_rtp.send_to(&buf, target.rtp_remote).await
                 },
                 video::RtpBuf::Rtcp(buf) => {
-                  socket_rtp.send_to(&buf, target.rtcp_remote).await
+                  socket_rtcp.send_to(&buf, target.rtcp_remote).await
                 }
               };
 
@@ -172,12 +169,18 @@ impl Session {
         },
       }
     }
+
+    tracing::trace!(%id, "finishing muxer");
+    // Throw away possible last RTP buffer (we don't care about
+    // it since this is real-time and there's no "trailer".
+    let _ = rtp_muxer::finish(muxer).await;
+    tracing::trace!(%id, "finished muxer");
   }
 
   async fn run_tcp(
     id: SessionId,
     mut source_delegate: SourceDelegate,
-    muxer: &mut video::RtpMuxer,
+    mut muxer: video::RtpMuxer,
     target: setup::SendInterleaved,
     mut task_context: TaskContext,
   ) {
@@ -186,7 +189,10 @@ impl Session {
         packet = source_delegate.recv_packet() => {
           match packet {
             Some(packet) => {
-              let packet = match muxer.mux(packet) {
+              let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
+              muxer = muxed;
+
+              let packet = match packet {
                 Ok(packet) => packet,
                 Err(err) => {
                   tracing::error!(%id, %err, "failed to mux packet");
@@ -226,6 +232,12 @@ impl Session {
         },
       }
     }
+
+    tracing::trace!(%id, "finishing muxer");
+    // Throw away possible last RTP buffer (we don't care about
+    // it since this is real-time and there's no "trailer".
+    let _ = rtp_muxer::finish(muxer).await;
+    tracing::trace!(%id, "finished muxer");
   }
 
 }

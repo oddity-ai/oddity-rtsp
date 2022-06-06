@@ -9,8 +9,6 @@ use tokio::net;
 use tokio_stream::StreamExt;
 use tokio_util::codec;
 
-use rand::random;
-
 use oddity_rtsp_protocol::{Codec, AsServer, ResponseMaybeInterleaved};
 
 use crate::runtime::Runtime;
@@ -29,7 +27,6 @@ pub type ResponseSenderTx = mpsc::UnboundedSender<ResponseMaybeInterleaved>;
 pub type ResponseSenderRx = mpsc::UnboundedReceiver<ResponseMaybeInterleaved>;
 
 pub struct Connection {
-  sender_tx: ResponseSenderTx,
   worker: Task,
 }
 
@@ -47,23 +44,19 @@ impl Connection {
     tracing::trace!(%id, "starting connection");
     let worker = runtime
       .task()
-      .spawn({
-        let sender_tx = sender_tx.clone();
-        move |task_context| Self::run(
-          id,
-          inner,
-          handler,
-          state_tx,
-          sender_tx,
-          sender_rx,
-          task_context,
-        )
-      })
+      .spawn(move |task_context| Self::run(
+        id,
+        inner,
+        handler,
+        state_tx,
+        sender_tx,
+        sender_rx,
+        task_context,
+      ))
       .await;
     tracing::trace!(%id, "started connection");
 
     Connection {
-      sender_tx,
       worker,
     }
   }
@@ -72,10 +65,6 @@ impl Connection {
     tracing::trace!("closing connection");
     self.worker.stop().await;
     tracing::trace!("closed connection");
-  }
-
-  pub fn sender_tx(&self) -> ResponseSenderTx {
-    self.sender_tx.clone()
   }
 
   async fn run(
@@ -160,8 +149,8 @@ pub struct ConnectionId(usize);
 
 impl ConnectionId {
 
-  pub fn generate() -> Self {
-    Self(random())
+  pub fn new(id: usize) -> Self {
+    Self(id)
   }
 
 }
@@ -185,7 +174,7 @@ impl ConnectionIdGenerator {
   pub fn generate(&mut self) -> ConnectionId {
     let id = self.0;
     self.0 += 1;
-    ConnectionId(id)
+    ConnectionId::new(id)
   }
 
 }

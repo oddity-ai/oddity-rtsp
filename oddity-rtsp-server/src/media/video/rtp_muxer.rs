@@ -14,12 +14,13 @@ pub async fn make_rtp_muxer() -> Result<RtpMuxer> {
     .unwrap()
 }
 
-pub async fn mux(
-  rtp_muxer: &'static mut RtpMuxer,
+pub async fn muxed(
+  mut rtp_muxer: RtpMuxer,
   packet: video::Packet,
-) -> Result<video::RtpBuf> {
+) -> (RtpMuxer, Result<video::RtpBuf>) {
   task::spawn_blocking(move || {
-      rtp_muxer.mux(packet)
+      let out = rtp_muxer.mux(packet);
+      (rtp_muxer, out)
     })
     .await
     .unwrap()

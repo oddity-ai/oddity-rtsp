@@ -66,6 +66,7 @@ impl App {
   pub async fn stop(&mut self) {
     match *self.state.lock().await {
       AppState::Running => {
+        self.server.stop().await;
         *self.state.lock().await = AppState::Stopping;
         {
           let mut context = self.context.lock().await;
@@ -80,10 +81,6 @@ impl App {
         panic!("app is already stopped");
       },
     };
-  }
-
-  pub async fn state(&self) -> AppState {
-    self.state.lock().await.clone()
   }
 
 }

@@ -472,6 +472,7 @@ impl FromStr for Port {
 
 }
 
+#[cfg(test)]
 mod tests {
 
   use super::{
