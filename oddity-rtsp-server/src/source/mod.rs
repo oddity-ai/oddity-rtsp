@@ -58,6 +58,8 @@ impl Source {
     state_tx: SourceStateTx,
     runtime: &Runtime,
   ) -> Result<Self, video::Error> {
+    let path = normalize_path(path);
+
     tracing::trace!(%descriptor, "initializing video reader");
     let reader = reader::make_reader(descriptor.clone().into()).await?;
     tracing::trace!(%descriptor, "initialized video reader");
@@ -211,3 +213,11 @@ impl SourceDelegate {
 
 pub type SourcePath = String;
 pub type SourcePathRef = str;
+
+fn normalize_path(path: SourcePath) -> SourcePath {
+  if path.starts_with("/") {
+    path
+  } else {
+    format!("/{}", &path)
+  }
+}
