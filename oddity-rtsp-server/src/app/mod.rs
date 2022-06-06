@@ -21,6 +21,11 @@ pub struct App {
 
 impl App {
 
+  // TODO failure can occur within app even when some contexts are
+  // already started which will cause them to break due to channels
+  // being dropped left and right, how can we handle this gracefully?
+  // idea: split start into runtime only and rest, if rest fails, stop
+  // runtime before handing back error!!
   pub async fn start(config: AppConfig) -> Result<App, Box<dyn Error>> {
     let runtime = Arc::new(Runtime::new());
     let mut context = AppContext {
