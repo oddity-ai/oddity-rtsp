@@ -13,16 +13,8 @@ use crate::session::session_manager::SessionManager;
 use crate::app::handler::AppHandler;
 use crate::app::config::AppConfig;
 
-#[derive(Clone)]
-pub enum AppState {
-  Running,
-  Stopping,
-  Stopped,
-}
-
 pub struct App {
   server: Server,
-  state: Arc<Mutex<AppState>>,
   context: Arc<Mutex<AppContext>>,
   runtime: Arc<Runtime>,
 }
@@ -57,30 +49,19 @@ impl App {
         handler,
         runtime.clone(),
       ).await?,
-      state: Arc::new(Mutex::new(AppState::Running)),
       context,
       runtime,
     })
   }
 
   pub async fn stop(&mut self) {
-    match *self.state.lock().await {
-      AppState::Running => {
-        self.server.stop().await;
-        *self.state.lock().await = AppState::Stopping;
-        {
-          let mut context = self.context.lock().await;
-          context.source_manager.stop().await;
-          context.session_manager.stop().await;
-        }
-        self.runtime.stop().await;
-        *self.state.lock().await = AppState::Stopped;
-      },
-      AppState::Stopping |
-      AppState::Stopped => {
-        panic!("app is already stopped");
-      },
-    };
+    self.server.stop().await;
+    {
+      let mut context = self.context.lock().await;
+      context.source_manager.stop().await;
+      context.session_manager.stop().await;
+    }
+    self.runtime.stop().await;
   }
 
 }

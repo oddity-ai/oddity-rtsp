@@ -123,7 +123,7 @@ impl Task {
 
   pub async fn stop(&mut self) {
     if let Some(stop) = self.stop.as_ref() {
-      let _ = stop.send(());
+      let _ = stop.send(()).await;
     }
     if let Some(hold) = self.hold.take() {
       let _ = hold.await;

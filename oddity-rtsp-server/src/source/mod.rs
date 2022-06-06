@@ -130,6 +130,7 @@ impl Source {
     mut task_context: TaskContext,
   ) {
     // TODO! implement retry mechanism
+    // TODO! implement reading file instead of live streams
 
     let stream_index = match media_info.streams.first() {
       Some(stream) => {
@@ -150,9 +151,7 @@ impl Source {
         packet = reader.next() => {
           match packet {
             Some(Ok(packet)) => {
-              if let Err(err) = packet_tx.send(packet.clone()) {
-                tracing::warn!(%path, %err, "failed to broadcast packet");
-              }
+              let _ = packet_tx.send(packet.clone());
             },
             Some(Err(err)) => {
               tracing::error!(%path, %err, "failed to read video stream");
@@ -167,9 +166,7 @@ impl Source {
         message = control_rx.recv() => {
           match message {
             Some(SourceControlMessage::StreamInfo) => {
-              if let Err(err) = media_info_tx.send(media_info.clone()) {
-                tracing::warn!(%path, %err, "failed to broadcast media info");
-              }
+              let _ =  media_info_tx.send(media_info.clone());
             },
             None => {
               tracing::error!(%path, "source control channel broke unexpectedly");

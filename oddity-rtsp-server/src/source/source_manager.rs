@@ -81,11 +81,11 @@ impl SourceManager {
     path: SourcePath,
     descriptor: MediaDescriptor,
   ) -> Result<(), RegisterSourceError> {
+    let path = source::normalize_path(path);
     if let Entry::Vacant(entry) = self
         .sources
         .lock().await
         .entry(path.clone()) {
-      let path = source::normalize_path(path);
       let _ = entry.insert(
         Source::start(
             name.clone(),
