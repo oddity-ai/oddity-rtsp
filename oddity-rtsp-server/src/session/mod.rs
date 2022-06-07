@@ -80,18 +80,11 @@ impl Session {
 
     match setup.rtp_target {
       SessionSetupTarget::RtpUdp(target) => {
-        tracing::trace!(%id, "starting rtp over udp loop");
-        Self::run_udp(
-          id.clone(),
-          source_delegate,
-          muxer,
-          target,
-          task_context,
-        ).await;
+        tracing::error!(%id, "started session with unsupported transport");
       },
       SessionSetupTarget::RtpTcp(target) => {
         tracing::trace!(%id, "starting rtp over tcp (interleaved) loop");
-        Self::run_tcp(
+        Self::run_tcp_interleaved(
           id.clone(),
           source_delegate,
           muxer,
@@ -104,83 +97,7 @@ impl Session {
     let _ = state_tx.send(SessionState::Stopped(id));
   }
 
-  async fn run_udp(
-    id: SessionId,
-    mut source_delegate: SourceDelegate,
-    mut muxer: video::RtpMuxer,
-    target: setup::SendOverSocket,
-    mut task_context: TaskContext,
-  ) {
-    let socket_rtp = match net::UdpSocket::bind("0.0.0.0:0").await {
-      Ok(socket) => socket,
-      Err(err) => {
-        tracing::error!(%id, %err, "failed to bind UDP socket for RTP");
-        return;
-      },
-    };
-
-    let socket_rtcp = match net::UdpSocket::bind("0.0.0.0:0").await {
-      Ok(socket) => socket,
-      Err(err) => {
-        tracing::error!(%id, %err, "failed to bind UDP socket for RTCP");
-        return;
-      },
-    };
-
-    loop {
-      select! {
-        // CANCEL SAFETY: `recv_packet` uses `broadcast::Receiver::recv` internally
-        // which is cancel safe.
-        packet = source_delegate.recv_packet() => {
-          match packet {
-            Some(packet) => {
-              let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
-              muxer = muxed;
-
-              let packet = match packet {
-                Ok(packet) => packet,
-                Err(err) => {
-                  tracing::error!(%id, %err, "failed to mux packet");
-                  break;
-                },
-              };
-
-              let sent = match packet {
-                video::RtpBuf::Rtp(buf) => {
-                  socket_rtp.send_to(&buf, target.rtp_remote).await
-                },
-                video::RtpBuf::Rtcp(buf) => {
-                  socket_rtcp.send_to(&buf, target.rtcp_remote).await
-                }
-              };
-
-              if let Err(err) = sent {
-                tracing::error!(%id, %err, "socket failed");
-                break;
-              }
-            },
-            None => {
-              tracing::error!(%id, "source broken");
-              break;
-            },
-          }
-        },
-        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-        _ = task_context.wait_for_stop() => {
-          tracing::trace!("tearing down session");
-          break;
-        },
-      }
-    }
-
-    tracing::trace!(%id, "finishing muxer");
-    // Throw away possible last RTP buffer (we don't care about
-    // it since this is real-time and there's no "trailer".
-    let _ = rtp_muxer::finish(muxer).await;
-    tracing::trace!(%id, "finished muxer");
-  }
-
-  async fn run_tcp(
+  async fn run_tcp_interleaved(
     id: SessionId,
     mut source_delegate: SourceDelegate,
     mut muxer: video::RtpMuxer,
