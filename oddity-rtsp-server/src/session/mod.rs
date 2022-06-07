@@ -192,3 +192,11 @@ impl fmt::Display for SessionId {
   }
 
 }
+
+impl From<&str> for SessionId {
+
+  fn from(session_id: &str) -> Self {
+    SessionId(session_id.to_string())
+  }
+
+}

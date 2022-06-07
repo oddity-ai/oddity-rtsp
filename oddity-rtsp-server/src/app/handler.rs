@@ -182,8 +182,9 @@ impl AppHandler {
       },
       Method::Play => {
         tracing::trace!("handling PLAY request");
-        // TODO!
-        unimplemented!();
+        // TODO! parse `Range` header, implement play logic, reply with `Range`
+        // TODO! already have `reply_to_play` (incomplete)
+        unimplemented!()
       },
       Method::Pause => {
         tracing::trace!("handling PAUSE request");
@@ -193,10 +194,26 @@ impl AppHandler {
         tracing::trace!("handling RECORD request");
         reply_method_not_supported(request)
       },
+      // TODO! further test teardown handling (with all the managers and channels)
       Method::Teardown => {
         tracing::trace!("handling TEARDOWN request");
-        // TODO!
-        unimplemented!();
+        if let Some(session_id) = request.session() {
+          match self
+              .use_context()
+              .await
+              .session_manager
+              .teardown(&session_id.into())
+              .await {
+            Some(()) => {
+              reply_to_teardown(request)
+            },
+            None => {
+              reply_session_not_found(request)
+            }
+          }
+        } else {
+          reply_session_not_found(request)
+        }
       },
       /* Invalid */
       // Request with method REDIRECT can only be sent from server to
@@ -264,6 +281,25 @@ fn reply_to_setup(
     .with_cseq_of(request)
     .with_header("Session", session_id)
     .with_header("Transport", transport)
+    .build()
+}
+
+#[inline]
+fn reply_to_teardown(
+  request: &Request,
+) -> Response {
+  Response::ok()
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_to_play(
+  request: &Request,
+) -> Response {
+  Response::ok()
+    .with_cseq_of(request)
+    // TODO! include range
     .build()
 }
 
@@ -352,6 +388,18 @@ fn reply_unsupported_transport(
     %request,
     "unsupported transport");
   Response::error(Status::UnsupportedTransport)
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_session_not_found(
+  request: &Request,
+) -> Response {
+  tracing::debug!(
+    %request,
+    "session not found");
+  Response::error(Status::SessionNotFound)
     .with_cseq_of(request)
     .build()
 }
