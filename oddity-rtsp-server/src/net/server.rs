@@ -67,6 +67,7 @@ impl Server {
     let mut connection_manager = ConnectionManager::start(handler, runtime).await;
     loop {
       select! {
+        // CANCEL SAFETY: `tokio::net::TcpListener::accept` is cancel safe.
         incoming = listener.accept() => {
           match incoming {
             Ok((incoming, peer_addr)) => {
@@ -78,6 +79,7 @@ impl Server {
             },
           }
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!("server stopping");
           break;

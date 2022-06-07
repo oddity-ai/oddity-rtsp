@@ -122,6 +122,7 @@ impl SessionManager {
   ) {
     loop {
       select! {
+        // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
         state = session_state_rx.recv() => {
           match state {
             Some(SessionState::Stopped(session_id)) => {
@@ -134,6 +135,7 @@ impl SessionManager {
             },
           }
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!("stopping session manager");
           break;

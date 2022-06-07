@@ -148,6 +148,7 @@ impl Source {
 
     loop {
       select! {
+        // CANCEL SAFETY: `StreamExt:next` is always cancel safe.
         packet = reader.next() => {
           match packet {
             Some(Ok(packet)) => {
@@ -163,6 +164,7 @@ impl Source {
             },
           };
         },
+        // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
         message = control_rx.recv() => {
           match message {
             Some(SourceControlMessage::StreamInfo) => {
@@ -174,6 +176,7 @@ impl Source {
             },
           };
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!(%path, "stopping source");
           break;

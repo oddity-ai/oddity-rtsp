@@ -88,6 +88,7 @@ impl Connection {
 
     loop {
       select! {
+        // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
         message = response_rx.recv() => {
           match message {
             Some(message) => {
@@ -101,6 +102,7 @@ impl Connection {
             },
           }
         },
+        // CANCEL SAFETY: `StreamExt:next` is always cancel safe.
         request = inbound.next() => {
           match request {
             Some(Ok(request)) => {
@@ -124,6 +126,7 @@ impl Connection {
             },
           }
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!(%id, %addr, "connection worker stopping");
           break;

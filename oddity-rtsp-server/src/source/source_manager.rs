@@ -142,6 +142,7 @@ impl SourceManager {
   ) {
     loop {
       select! {
+        // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
         state = source_state_rx.recv() => {
           match state {
             Some(SourceState::Stopped(source_id)) => {
@@ -154,6 +155,7 @@ impl SourceManager {
             },
           }
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!("stopping source manager");
           break;

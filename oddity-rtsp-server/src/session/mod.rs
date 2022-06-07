@@ -129,6 +129,8 @@ impl Session {
 
     loop {
       select! {
+        // CANCEL SAFETY: `recv_packet` uses `broadcast::Receiver::recv` internally
+        // which is cancel safe.
         packet = source_delegate.recv_packet() => {
           match packet {
             Some(packet) => {
@@ -163,6 +165,7 @@ impl Session {
             },
           }
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!("tearing down session");
           break;
@@ -186,6 +189,8 @@ impl Session {
   ) {
     loop {
       select! {
+        // CANCEL SAFETY: `recv_packet` uses `broadcast::Receiver::recv` internally
+        // which is cancel safe.
         packet = source_delegate.recv_packet() => {
           match packet {
             Some(packet) => {
@@ -226,6 +231,7 @@ impl Session {
             },
           }
         },
+        // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
           tracing::trace!("tearing down session");
           break;
