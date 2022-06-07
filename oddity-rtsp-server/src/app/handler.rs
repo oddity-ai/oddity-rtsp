@@ -7,6 +7,7 @@ use oddity_rtsp_protocol::{
   Response,
   Method,
   Status,
+  Transport,
 };
 
 use crate::net::connection::ResponseSenderTx;
@@ -157,6 +158,7 @@ impl AppHandler {
         };
         tracing::trace!(path=request.path(), "setup session");
 
+        let transport = session_setup.rtsp_transport.clone();
         match self
             .use_context()
             .await
@@ -166,7 +168,7 @@ impl AppHandler {
           // Session was successfully registered!
           Ok(session_id) => {
             tracing::trace!(path=request.path(), %session_id, "registered session");
-            reply_to_setup_with_session_id(request, &session_id)
+            reply_to_setup(request, &session_id, &transport)
           },
           // In the highly unlikely case that the randomly generated session was already
           // in use before.
@@ -253,13 +255,15 @@ fn reply_to_describe_with_media_sdp(
 }
 
 #[inline]
-fn reply_to_setup_with_session_id(
+fn reply_to_setup(
   request: &Request,
   session_id: &SessionId,
+  transport: &Transport,
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
     .with_header("Session", session_id)
+    .with_header("Transport", transport)
     .build()
 }
 

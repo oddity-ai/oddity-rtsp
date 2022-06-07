@@ -44,11 +44,12 @@ fn is_parameter_supported(
 ) -> bool {
   /*
     Supported parameters are:
+    - `unicast`
     - `interleaved`
     - `mode` (if value is "PLAY")
   */
   match parameter {
-    rtsp::Parameter::Unicast                  => false, // UDP not supported
+    rtsp::Parameter::Unicast                  => true,
     rtsp::Parameter::Multicast                => false, // Multicast not supported
     rtsp::Parameter::Destination(_)           => false, // UDP not supported
     rtsp::Parameter::Interleaved(_)           => true,

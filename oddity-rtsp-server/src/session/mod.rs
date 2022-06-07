@@ -168,15 +168,18 @@ impl Session {
 pub struct SessionId(String);
 
 impl SessionId {
-  const SESSION_ID_LEN: usize = 16;
+  const SESSION_ID_LEN: u32 = 8;
 
   pub fn generate() -> SessionId {
     SessionId(
       rand::thread_rng()
-        .sample_iter(&rand::distributions::Alphanumeric)
-        .take(Self::SESSION_ID_LEN)
-        .map(char::from)
-        .collect()
+        .sample(
+          &rand::distributions::Uniform::from(
+            10_u32.pow(Self::SESSION_ID_LEN - 1)..
+              10_u32.pow(Self::SESSION_ID_LEN)
+          )
+        )
+        .to_string()
     )
   }
 
