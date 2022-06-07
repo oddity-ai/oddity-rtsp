@@ -5,7 +5,7 @@ pub fn resolve_transport(
   rtsp_transport: &rtsp::Transport,
   rtp_muxer: &video::RtpMuxer,
 ) -> rtsp::Transport {
-  let (rtp_port, rtcp_port) = rtp_muxer.local_ports();
+  let (rtp_port, rtcp_port) = rtp_muxer.local_ports(); // TODO! segfault
 
   rtsp_transport
     .clone()
