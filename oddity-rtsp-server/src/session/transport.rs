@@ -1,5 +1,4 @@
 use oddity_rtsp_protocol as rtsp;
-use oddity_video as video;
 
 pub fn resolve_transport(
   rtsp_transport: &rtsp::Transport,

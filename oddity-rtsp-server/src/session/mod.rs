@@ -6,7 +6,6 @@ pub mod setup;
 use std::fmt;
 
 use tokio::select;
-use tokio::net;
 use tokio::sync::mpsc;
 
 use rand::Rng;
@@ -79,7 +78,7 @@ impl Session {
     let muxer = setup.rtp_muxer;
 
     match setup.rtp_target {
-      SessionSetupTarget::RtpUdp(target) => {
+      SessionSetupTarget::RtpUdp(_) => {
         tracing::error!(%id, "started session with unsupported transport");
       },
       SessionSetupTarget::RtpTcp(target) => {

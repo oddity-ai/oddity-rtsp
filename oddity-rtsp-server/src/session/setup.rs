@@ -34,7 +34,7 @@ impl SessionSetup {
     rtp_muxer::make_rtp_muxer().await
       .map_err(SessionSetupError::Media)
       .and_then(|mut rtp_muxer| {
-        let rtsp_transport = transport::resolve_transport(&transport, &rtp_muxer);
+        let rtsp_transport = transport::resolve_transport(&transport);
         tracing::trace!(%rtsp_transport, "resolved transport");
         let rtp_target = SessionSetupTarget::from_rtsp_transport(&transport, sender)
           .ok_or_else(|| SessionSetupError::DestinationInvalid)?;
