@@ -5,8 +5,8 @@ use super::Error;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Range {
-  from: Option<NptTime>,
-  to: Option<NptTime>,
+  pub start: Option<NptTime>,
+  pub end: Option<NptTime>,
 }
 
 impl Range {
@@ -18,13 +18,13 @@ impl Range {
 impl fmt::Display for Range {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match (self.from.as_ref(), self.to.as_ref()) {
-      (Some(from), Some(to))
-        => write!(f, "{}-{}", from, to),
-      (Some(from), None)
-        => write!(f, "{}-", from),
-      (None, Some(to))
-        => write!(f, "-{}", to),
+    match (self.start.as_ref(), self.end.as_ref()) {
+      (Some(start), Some(end))
+        => write!(f, "{}-{}", start, end),
+      (Some(start), None)
+        => write!(f, "{}-", start),
+      (None, Some(end))
+        => write!(f, "-{}", end),
       (None, None)
         => write!(f, "-"),
     }
@@ -40,12 +40,12 @@ impl FromStr for Range {
       None => {
         if let Some((unit, value)) = s.split_once("=") {
           if Self::SUPPORTED_UNITS.contains(&unit) {
-            if let Some((from, to)) = value.split_once("-") {
-              let from = if !from.is_empty() { Some(from.parse()?) } else { None };
-              let to = if !to.is_empty() { Some(to.parse()?) } else { None };
+            if let Some((start, end)) = value.split_once("-") {
+              let start = if !start.is_empty() { Some(start.parse()?) } else { None };
+              let end = if !end.is_empty() { Some(end.parse()?) } else { None };
               Ok(Range {
-                from,
-                to,
+                start,
+                end,
               })
             } else {
               Err(Error::RangeMalformed { value: s.to_string() })

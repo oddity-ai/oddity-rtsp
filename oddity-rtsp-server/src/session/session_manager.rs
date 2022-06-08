@@ -7,6 +7,8 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
+use oddity_rtsp_protocol as rtsp;
+
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::source::SourceDelegate;
@@ -17,6 +19,7 @@ use crate::session::{
   SessionState,
   SessionStateTx,
   SessionStateRx,
+  PlaySessionError,
 };
 
 type SessionMap = Arc<Mutex<HashMap<SessionId, Session>>>;
@@ -70,7 +73,7 @@ impl SessionManager {
     }
   }
 
-  pub async fn setup_and_start(
+  pub async fn setup(
     &mut self,
     source_delegate: SourceDelegate,
     setup: SessionSetup,
@@ -97,21 +100,38 @@ impl SessionManager {
     }
   }
 
+  pub async fn play(
+    &mut self,
+    id: &SessionId,
+    range: Option<rtsp::Range>,
+  ) -> Option<Result<(), PlaySessionError>> {
+    if let Some(session) = self.sessions.lock().await.get_mut(id) {
+      tracing::trace!(session_id=%id, "start playing");
+      Some(session.play(range))
+    } else {
+      tracing::trace!(
+        session_id=%id,
+        "caller tried to play session that does not exist",
+      );
+      None
+    }
+  }
+
   pub async fn teardown(
     &mut self,
     id: &SessionId,
-  ) -> Option<()> {
+  ) -> bool {
     if let Some(session) = self.sessions.lock().await.get_mut(id) {
       tracing::trace!(session_id=%id, "tearing down session");
       session.teardown().await;
       tracing::trace!(session_id=%id, "torn down session");
-      Some(())
+      true
     } else {
       tracing::trace!(
         session_id=%id,
         "caller tried to tear down session that does not exist",
       );
-      None
+      false
     }
   }
 

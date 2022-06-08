@@ -8,10 +8,11 @@ use oddity_rtsp_protocol::{
   Method,
   Status,
   Transport,
+  Error,
 };
 
 use crate::net::connection::ResponseSenderTx;
-use crate::session::SessionId;
+use crate::session::{SessionId, PlaySessionError};
 use crate::session::session_manager::RegisterSessionError;
 use crate::session::setup::{SessionSetup, SessionSetupError};
 use crate::app::AppContext;
@@ -163,7 +164,7 @@ impl AppHandler {
             .use_context()
             .await
             .session_manager
-            .setup_and_start(source_delegate, session_setup)
+            .setup(source_delegate, session_setup)
             .await {
           // Session was successfully registered!
           Ok(session_id) => {
@@ -182,9 +183,56 @@ impl AppHandler {
       },
       Method::Play => {
         tracing::trace!("handling PLAY request");
-        // TODO! parse `Range` header, implement play logic, reply with `Range`
-        // TODO! already have `reply_to_play` (incomplete)
-        unimplemented!()
+
+        let range = match request.range() {
+          Some(Ok(range)) => {
+            Some(range)
+          },
+          Some(Err(Error::RangeUnitNotSupported { value })) |
+          Some(Err(Error::RangeTimeNotSupported { value })) => {
+            tracing::error!(
+              %request, %value,
+              "client provided range header format that is not supported");
+            return reply_not_implemented(request);
+          },
+          Some(Err(error)) => {
+            tracing::error!(
+              %request, %error,
+              "failed to parse range header (bad request)");
+            return reply_bad_request(request);
+          },
+          None => None,
+        };
+
+        if let Some(session_id) = request.session() {
+          match self
+              .use_context()
+              .await
+              .session_manager
+              .play(&session_id.into(), range)
+              .await {
+            Some(Ok(())) => {
+              reply_to_play(request)
+            },
+            Some(Err(PlaySessionError::RangeNotSupported)) => {
+              tracing::error!(
+                %request,
+                "client provided range that is not supported for the resource");
+              reply_header_field_not_valid(request)
+            },
+            Some(Err(PlaySessionError::ControlBroken)) => {
+              tracing::error!(
+                %request,
+                "session control channel unexpectedly broke");
+              reply_internal_server_error(request)
+            },
+            None => {
+              reply_session_not_found(request)
+            },
+          }
+        } else {
+          reply_session_not_found(request)
+        }
       },
       Method::Pause => {
         tracing::trace!("handling PAUSE request");
@@ -198,18 +246,15 @@ impl AppHandler {
       Method::Teardown => {
         tracing::trace!("handling TEARDOWN request");
         if let Some(session_id) = request.session() {
-          match self
+          if self
               .use_context()
               .await
               .session_manager
               .teardown(&session_id.into())
               .await {
-            Some(()) => {
-              reply_to_teardown(request)
-            },
-            None => {
-              reply_session_not_found(request)
-            }
+            reply_to_teardown(request)
+          } else {
+            reply_session_not_found(request)
           }
         } else {
           reply_session_not_found(request)
@@ -300,6 +345,15 @@ fn reply_to_play(
   Response::ok()
     .with_cseq_of(request)
     // TODO! include range
+    .build()
+}
+
+#[inline]
+fn reply_bad_request(
+  request: &Request,
+) -> Response {
+  Response::error(Status::BadRequest)
+    .with_cseq_of(request)
     .build()
 }
 
@@ -400,6 +454,30 @@ fn reply_session_not_found(
     %request,
     "session not found");
   Response::error(Status::SessionNotFound)
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_not_implemented(
+  request: &Request,
+) -> Response {
+  tracing::debug!(
+    %request,
+    "not implemented");
+  Response::error(Status::NotImplemented)
+    .with_cseq_of(request)
+    .build()
+}
+
+#[inline]
+fn reply_header_field_not_valid(
+  request: &Request,
+) -> Response {
+  tracing::debug!(
+    %request,
+    "header field not valid");
+  Response::error(Status::HeaderFieldNotValid)
     .with_cseq_of(request)
     .build()
 }

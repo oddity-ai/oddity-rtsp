@@ -4,6 +4,7 @@ pub mod session_manager;
 pub mod setup;
 
 use std::fmt;
+use std::error;
 
 use tokio::select;
 use tokio::sync::mpsc;
@@ -26,8 +27,16 @@ pub enum SessionState {
 pub type SessionStateTx = mpsc::UnboundedSender<SessionState>;
 pub type SessionStateRx = mpsc::UnboundedReceiver<SessionState>;
 
+pub enum SessionControlMessage {
+  Play,
+}
+
+pub type SessionControlTx = mpsc::UnboundedSender<SessionControlMessage>;
+pub type SessionControlRx = mpsc::UnboundedReceiver<SessionControlMessage>;
+
 pub struct Session {
   worker: Task,
+  control_tx: SessionControlTx,
 }
 
 impl Session {
@@ -39,6 +48,8 @@ impl Session {
     state_tx: SessionStateTx,
     runtime: &Runtime,
   ) -> Self {
+    let (control_tx, control_rx) = mpsc::unbounded_channel();
+
     tracing::trace!(%id, "starting session");
     let worker = runtime
       .task()
@@ -49,6 +60,7 @@ impl Session {
             id,
             source_delegate,
             setup,
+            control_rx,
             state_tx,
             task_context,
           )
@@ -59,7 +71,27 @@ impl Session {
 
     Self {
       worker,
+      control_tx,
     }
+  }
+
+  pub fn play(&mut self, range: Option<rtsp::Range>) -> Result<(), PlaySessionError> {
+    if let Some(range) = range.as_ref() {
+      tracing::trace!(%range, "checking if provided range is valid and supported");
+      if !Self::is_range_supported(range) {
+        tracing::error!(%range, "session does not support playing with this range");
+        return Err(PlaySessionError::RangeNotSupported);
+      }
+    }
+
+    tracing::trace!("sending play signal to session");
+    self
+      .control_tx
+      .send(SessionControlMessage::Play)
+      .map_err(|_| PlaySessionError::ControlBroken)?;
+    tracing::trace!("session playing");
+
+    Ok(())
   }
 
   pub async fn teardown(&mut self) {
@@ -72,6 +104,7 @@ impl Session {
     id: SessionId,
     source_delegate: SourceDelegate,
     setup: SessionSetup,
+    control_rx: SessionControlRx,
     state_tx: SessionStateTx,
     task_context: TaskContext,
   ) {
@@ -88,6 +121,7 @@ impl Session {
           source_delegate,
           muxer,
           target,
+          control_rx,
           task_context,
         ).await;
       },
@@ -101,8 +135,11 @@ impl Session {
     mut source_delegate: SourceDelegate,
     mut muxer: video::RtpMuxer,
     target: setup::SendInterleaved,
+    mut control_rx: SessionControlRx,
     mut task_context: TaskContext,
   ) {
+    let mut state = SessionMediaState::Ready;
+
     loop {
       select! {
         // CANCEL SAFETY: `recv_packet` uses `broadcast::Receiver::recv` internally
@@ -121,24 +158,26 @@ impl Session {
                 },
               };
 
-              let rtsp_interleaved_message = match packet {
-                video::RtpBuf::Rtp(payload) => {
-                  rtsp::ResponseMaybeInterleaved::Interleaved {
-                    channel: target.rtp_channel,
-                    payload: payload.into(),
-                  }
-                },
-                video::RtpBuf::Rtcp(payload) => {
-                  rtsp::ResponseMaybeInterleaved::Interleaved {
-                    channel: target.rtcp_channel,
-                    payload: payload.into(),
-                  }
-                },
-              };
+              if state == SessionMediaState::Playing {
+                let rtsp_interleaved_message = match packet {
+                  video::RtpBuf::Rtp(payload) => {
+                    rtsp::ResponseMaybeInterleaved::Interleaved {
+                      channel: target.rtp_channel,
+                      payload: payload.into(),
+                    }
+                  },
+                  video::RtpBuf::Rtcp(payload) => {
+                    rtsp::ResponseMaybeInterleaved::Interleaved {
+                      channel: target.rtcp_channel,
+                      payload: payload.into(),
+                    }
+                  },
+                };
 
-              if let Err(err) = target.sender.send(rtsp_interleaved_message) {
-                tracing::trace!(%id, %err, "underlying connection closed");
-                break;
+                if let Err(err) = target.sender.send(rtsp_interleaved_message) {
+                  tracing::trace!(%id, %err, "underlying connection closed");
+                  break;
+                }
               }
             }
             None => {
@@ -146,6 +185,19 @@ impl Session {
               break;
             },
           }
+        },
+        // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
+        message = control_rx.recv() => {
+          match message {
+            Some(SessionControlMessage::Play) => {
+              state = SessionMediaState::Playing;
+              tracing::info!(%id, "session now playing");
+            },
+            None => {
+              tracing::error!(%id, "session control channel broke unexpectedly");
+              break;
+            },
+          };
         },
         // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
         _ = task_context.wait_for_stop() => {
@@ -160,6 +212,16 @@ impl Session {
     // it since this is real-time and there's no "trailer".
     let _ = rtp_muxer::finish(muxer).await;
     tracing::trace!(%id, "finished muxer");
+  }
+
+  fn is_range_supported(range: &rtsp::Range) -> bool {
+    match (range.start.as_ref(), range.end.as_ref()) {
+      (Some(rtsp::NptTime::Now), None)
+        => true,
+      (Some(rtsp::NptTime::Time(start)), None) if *start <= 0.0
+        => true,
+      _ => false,
+    }
   }
 
 }
@@ -199,4 +261,29 @@ impl From<&str> for SessionId {
     SessionId(session_id.to_string())
   }
 
+}
+
+#[derive(Debug)]
+pub enum PlaySessionError {
+  RangeNotSupported,
+  ControlBroken,
+}
+
+impl fmt::Display for PlaySessionError {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      PlaySessionError::RangeNotSupported => write!(f, "range not supported"),
+      PlaySessionError::ControlBroken => write!(f, "failed to control session"),
+    }
+  }
+
+}
+
+impl error::Error for PlaySessionError {}
+
+#[derive(PartialEq)]
+enum SessionMediaState {
+  Ready,
+  Playing,
 }
