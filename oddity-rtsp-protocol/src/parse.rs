@@ -383,11 +383,12 @@ mod tests {
     Request,
     RequestParser,
     ResponseParser,
-    Status,
     Version,
     Method,
     StatusCategory,
   };
+
+  use super::Status;
 
   #[test]
   fn parse_options_request() {

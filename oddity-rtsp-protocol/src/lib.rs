@@ -6,6 +6,7 @@ mod request;
 mod response;
 mod buffer;
 mod transport;
+mod range;
 mod io;
 mod error;
 
@@ -36,6 +37,10 @@ pub use transport::{
   Lower,
   Channel,
   Port,
+};
+pub use range::{
+  Range,
+  NptTime,
 };
 pub use io::{
   RtspWriter,

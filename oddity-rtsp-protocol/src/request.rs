@@ -10,6 +10,7 @@ use super::{
     Uri,
   },
   transport::Transport,
+  range::Range,
   Error,
 };
 
@@ -80,6 +81,14 @@ impl Request {
         .collect::<Result<Vec<_>, _>>()
     } else {
       Ok(Vec::new())
+    }
+  }
+
+  pub fn range(&self) -> Option<Result<Range, Error>> {
+    if let Some(value) = self.headers.get("Range") {
+      Some(value.parse())
+    } else {
+      None
     }
   }
 

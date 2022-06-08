@@ -133,6 +133,23 @@ pub enum Error {
   /// Interleaved payload too large. The size cannot be larger than
   /// the maximum value of a 16-bit unsigned integer.
   InterleavedPayloadTooLarge,
+  /// Range header value malformed.
+  RangeMalformed {
+    value: String,
+  },
+  /// Parser does not support provided `Range` header unit.
+  RangeUnitNotSupported {
+    value: String,
+  },
+  /// Parser does not support effective time in `Range` header.
+  RangeTimeNotSupported {
+    value: String,
+  },
+  /// The NPT time (either the from or to part of the time specifier)
+  /// is malformed.
+  RangeNptTimeMalfored {
+    value: String,
+  },
   /// Underlying socket was shut down. This is not really an error and
   /// consumers are expected to handle it gracefully.
   Shutdown,
@@ -200,6 +217,14 @@ impl fmt::Display for Error {
         write!(f, "transport port malformed: {}", &value),
       Error::InterleavedPayloadTooLarge =>
         write!(f, "interleaved payload too large"),
+      Error::RangeMalformed { value } =>
+        write!(f, "range malformed: {}", value),
+      Error::RangeUnitNotSupported { value } =>
+        write!(f, "range unit not supported: {}", &value),
+      Error::RangeTimeNotSupported { value } =>
+        write!(f, "range time not supported: {}", &value),
+      Error::RangeNptTimeMalfored { value } =>
+        write!(f, "range npt time malformed: {}", &value),
       Error::Shutdown =>
         write!(f, "underlying socket was shut down"),
       Error::Io(err) =>
