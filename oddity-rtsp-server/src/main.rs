@@ -17,6 +17,8 @@ use app::config::AppConfig;
 
 use tokio::signal::ctrl_c;
 
+use oddity_video as video;
+
 macro_rules! on_error_exit {
   ($expr:expr) => {
     match $expr {
@@ -32,6 +34,7 @@ macro_rules! on_error_exit {
 #[tokio::main]
 async fn main() {
   on_error_exit!(initialize_tracing());
+  initialize_media();
 
   let config = on_error_exit!(initialize_and_read_config());
   tracing::debug!(?config, "loaded config file");
@@ -52,6 +55,10 @@ fn initialize_tracing() -> Result<(), Box<dyn Error + Send + Sync>> {
   tracing_subscriber::fmt()
     .with_env_filter(tracing_subscriber::EnvFilter::from_env("LOG"))
     .try_init()
+}
+
+fn initialize_media() {
+  video::init();
 }
 
 fn initialize_and_read_config() -> Result<AppConfig, ConfigError> {
