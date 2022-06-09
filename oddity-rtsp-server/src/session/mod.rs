@@ -140,7 +140,7 @@ impl Session {
   ) {
     let mut state = SessionMediaState::Ready;
 
-    loop {
+    'main: loop {
       select! {
         // CANCEL SAFETY: `recv_packet` uses `broadcast::Receiver::recv` internally
         // which is cancel safe.
@@ -181,7 +181,7 @@ impl Session {
                 for message in messages {
                   if let Err(err) = target.sender.send(message) {
                     tracing::trace!(%id, %err, "underlying connection closed");
-                    break;
+                    break 'main;
                   }
                 }
               }
