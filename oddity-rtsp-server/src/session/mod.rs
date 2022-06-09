@@ -161,7 +161,6 @@ impl Session {
               if state == SessionMediaState::Playing {
                 let rtsp_interleaved_message = match packet {
                   video::RtpBuf::Rtp(payload) => {
-                    tracing::trace!("{}", payload.len()); // TODO
                     rtsp::ResponseMaybeInterleaved::Interleaved {
                       channel: target.rtp_channel,
                       payload: payload.into(),
