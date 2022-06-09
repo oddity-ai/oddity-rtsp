@@ -17,7 +17,7 @@ pub async fn make_rtp_muxer() -> Result<RtpMuxer> {
 pub async fn muxed(
   mut rtp_muxer: RtpMuxer,
   packet: video::Packet,
-) -> (RtpMuxer, Result<video::RtpBuf>) {
+) -> (RtpMuxer, Result<Vec<video::RtpBuf>>) {
   task::spawn_blocking(move || {
       let out = rtp_muxer.mux(packet);
       (rtp_muxer, out)
@@ -28,7 +28,7 @@ pub async fn muxed(
 
 pub async fn finish(
   mut rtp_muxer: RtpMuxer,
-) -> Result<video::RtpBuf> {
+) -> Result<Vec<video::RtpBuf>> {
   task::spawn_blocking(move || {
       rtp_muxer.finish()
     })

@@ -61,7 +61,7 @@ impl Source {
     let path = normalize_path(path);
 
     tracing::trace!(%descriptor, "initializing video reader");
-    let reader = reader::make_reader(descriptor.clone().into()).await?;
+    let reader = reader::make_reader_with_sane_settings(descriptor.clone().into()).await?;
     tracing::trace!(%descriptor, "initialized video reader");
     let media_info = MediaInfo::from_reader_best_video_stream(&reader)?;
 

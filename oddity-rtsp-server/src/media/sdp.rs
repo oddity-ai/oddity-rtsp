@@ -34,7 +34,7 @@ pub async fn create(
   const TARGET_DUMMY_PORT: u16 = 0;
 
   tracing::trace!("sdp: initializing reader");
-  let reader = reader::make_reader(descriptor.clone().into()).await
+  let reader = reader::make_reader_with_sane_settings(descriptor.clone().into()).await
     .map_err(SdpError::Media)?;
   let best_video_stream = reader.best_video_stream_index()
     .map_err(SdpError::Media)?;

@@ -159,24 +159,30 @@ impl Session {
               };
 
               if state == SessionMediaState::Playing {
-                let rtsp_interleaved_message = match packet {
-                  video::RtpBuf::Rtp(payload) => {
-                    rtsp::ResponseMaybeInterleaved::Interleaved {
-                      channel: target.rtp_channel,
-                      payload: payload.into(),
+                let messages = packet
+                  .into_iter()
+                  .map(|item| {
+                    match item {
+                      video::RtpBuf::Rtp(payload) => {
+                        rtsp::ResponseMaybeInterleaved::Interleaved {
+                          channel: target.rtp_channel,
+                          payload: payload.into(),
+                        }
+                      },
+                      video::RtpBuf::Rtcp(payload) => {
+                        rtsp::ResponseMaybeInterleaved::Interleaved {
+                          channel: target.rtcp_channel,
+                          payload: payload.into(),
+                        }
+                      },
                     }
-                  },
-                  video::RtpBuf::Rtcp(payload) => {
-                    rtsp::ResponseMaybeInterleaved::Interleaved {
-                      channel: target.rtcp_channel,
-                      payload: payload.into(),
-                    }
-                  },
-                };
+                  });
 
-                if let Err(err) = target.sender.send(rtsp_interleaved_message) {
-                  tracing::trace!(%id, %err, "underlying connection closed");
-                  break;
+                for message in messages {
+                  if let Err(err) = target.sender.send(message) {
+                    tracing::trace!(%id, %err, "underlying connection closed");
+                    break;
+                  }
                 }
               }
             }
