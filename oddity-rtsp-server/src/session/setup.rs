@@ -38,7 +38,6 @@ impl SessionSetup {
         tracing::trace!(%rtsp_transport, "resolved transport");
         let rtp_target = SessionSetupTarget::from_rtsp_transport(&transport, sender)
           .ok_or_else(|| SessionSetupError::DestinationInvalid)?;
-        // TODO! fix segfault between `make_rtp_muxer` and here... ^^^
         tracing::debug!(?rtp_target, "calculated target");
 
         for stream_info in media_info.streams {
