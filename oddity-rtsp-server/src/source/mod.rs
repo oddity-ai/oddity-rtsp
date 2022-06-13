@@ -66,8 +66,6 @@ impl Source {
     let media_info = MediaInfo::from_reader_best_video_stream(&reader)?;
 
     let (control_tx, control_rx) = mpsc::unbounded_channel();
-    // TODO media info broadcaster could be problem because receivers AREN'T
-    // always listening (should they, or should this be some other channel ??)
     let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_MEDIA_INFO);
     let (packet_tx, _) = broadcast::channel(Self::MAX_QUEUED_PACKETS);
 

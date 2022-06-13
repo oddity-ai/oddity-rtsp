@@ -140,5 +140,3 @@ impl RequestMetadata {
   }
 
 }
-
-// TODO Builder for [`Request`].

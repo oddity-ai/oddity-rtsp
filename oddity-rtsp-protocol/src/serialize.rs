@@ -135,7 +135,7 @@ impl Serialize for StatusCode {
 #[cfg(test)]
 mod tests {
 
-  // TODO A bunch of macros could make this way more readable.
+  // FIXME A bunch of macros could make this way more readable.
 
   use std::collections::BTreeMap;
 

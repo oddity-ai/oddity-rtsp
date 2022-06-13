@@ -40,14 +40,6 @@ pub async fn create(
     .map_err(SdpError::Media)?;
   tracing::trace!(best_video_stream, "sdp: initialized reader");
 
-  let time_range = match descriptor {
-    MediaDescriptor::File(_)
-      => unimplemented!() /* TODO */,
-    MediaDescriptor::Stream(_)
-      => TimeRange::Live,
-  };
-  tracing::trace!(%time_range, "sdp: determined time range");
-
   tracing::trace!("sdp: initializing muxer");
   let muxer = rtp_muxer::make_rtp_muxer().await
     .and_then(|muxer|
@@ -79,7 +71,9 @@ pub async fn create(
     ORIGIN_DUMMY_HOST.into(),
     name.to_string(),
     TARGET_DUMMY_HOST.into(),
-    time_range
+    // Since we support only live streams or playback on repeat,
+    // all streams are basically "live".
+    TimeRange::Live,
   );
 
   let sdp = sdp
