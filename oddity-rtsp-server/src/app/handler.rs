@@ -8,6 +8,7 @@ use oddity_rtsp_protocol::{
   Method,
   Status,
   Transport,
+  Range,
   Error,
 };
 
@@ -209,10 +210,16 @@ impl AppHandler {
               .use_context()
               .await
               .session_manager
-              .play(&session_id.into(), range)
+              .play(&session_id.into(), range.clone())
               .await {
             Some(Ok(())) => {
-              reply_to_play(request)
+              reply_to_play(
+                request,
+                // Either just echo back the range the client requested, since
+                // we accepted it it will be correct or just generate a generic
+                // `now-` range.
+                range.unwrap_or_else(|| Range::new_for_live())
+              )
             },
             Some(Err(PlaySessionError::RangeNotSupported)) => {
               tracing::error!(
@@ -242,7 +249,6 @@ impl AppHandler {
         tracing::trace!("handling RECORD request");
         reply_method_not_supported(request)
       },
-      // TODO! further test teardown handling (with all the managers and channels)
       Method::Teardown => {
         tracing::trace!("handling TEARDOWN request");
         if let Some(session_id) = request.session() {
@@ -341,10 +347,11 @@ fn reply_to_teardown(
 #[inline]
 fn reply_to_play(
   request: &Request,
+  range: Range,
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
-    // TODO! include range
+    .with_header("Range", range)
     .build()
 }
 

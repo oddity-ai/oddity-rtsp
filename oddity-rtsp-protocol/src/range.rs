@@ -13,6 +13,21 @@ impl Range {
   const SUPPORTED_UNITS: [&'static str; 1] = [
     "npt",
   ];
+
+  pub fn new(start: NptTime, end: NptTime) -> Range {
+    Range {
+      start: Some(start),
+      end: Some(end),
+    }
+  }
+
+  pub fn new_for_live() -> Range {
+    Range {
+      start: Some(NptTime::Now),
+      end: None,
+    }
+  }
+
 }
 
 impl fmt::Display for Range {
