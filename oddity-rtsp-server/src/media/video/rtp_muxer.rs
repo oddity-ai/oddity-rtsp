@@ -18,8 +18,6 @@ pub async fn muxed(
   mut rtp_muxer: RtpMuxer,
   packet: video::Packet,
 ) -> (RtpMuxer, Result<Vec<video::RtpBuf>>) {
-  // TODO! having issue with playback timing probably due to some
-  // muxer setting or rescaling something
   task::spawn_blocking(move || {
       let out = rtp_muxer.mux(packet);
       (rtp_muxer, out)
