@@ -3,7 +3,7 @@ pub mod source_manager;
 use std::time;
 
 use tokio::{select, pin};
-use tokio::time::timeout;
+use tokio::time::{sleep, timeout};
 use tokio::sync::mpsc;
 use tokio::sync::broadcast;
 use tokio_stream::StreamExt;
@@ -142,7 +142,7 @@ impl Source {
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
   ) {
-    // TODO! implement reading file instead of live streams
+    let is_file = if let MediaDescriptor::File(_) = &descriptor { true } else { false };
 
     'outer: loop {
       let stream_index = match media_info.streams.first() {
@@ -166,6 +166,11 @@ impl Source {
             match packet {
               Some(Ok(packet)) => {
                 let _ = packet_tx.send(packet.clone());
+                if is_file {
+                  // To pretend the file is a live stream, we need to wait a bit after
+                  // each packet or we'll overload the consumer.
+                  sleep(packet.duration()).await;
+                }
               },
               Some(Err(err)) => {
                 tracing::error!(%path, %err, "failed to read video stream");
@@ -173,7 +178,13 @@ impl Source {
               },
               None => {
                 tracing::info!(%path, "video stream ended");
-                break 'inner;
+                if is_file {
+                  // TODO! instead of doing break here we should just access the reader
+                  // and seek back to the beginning but this requires some refactoring...
+                  break 'inner;
+                } else {
+                  break 'inner;
+                }
               },
             };
           },
