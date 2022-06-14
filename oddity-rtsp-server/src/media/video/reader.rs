@@ -9,6 +9,9 @@ use oddity_video::{self as video, Reader};
 
 type Result<T> = std::result::Result<T, video::Error>;
 
+// TODO! refactor this to wrap `Reader` in async version that also
+// exports the original API which is required for the other todo.
+
 pub async fn make_reader_with_sane_settings(
   locator: video::Locator,
 ) -> Result<Reader> {
