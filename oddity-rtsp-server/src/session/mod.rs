@@ -132,21 +132,56 @@ impl Session {
 
   async fn run_tcp_interleaved(
     id: SessionId,
-    mut source_delegate: SourceDelegate,
+    source_delegate: SourceDelegate,
     mut muxer: video::RtpMuxer,
     target: setup::SendInterleaved,
     mut control_rx: SessionControlRx,
     mut task_context: TaskContext,
   ) {
     let mut state = SessionMediaState::Ready;
+    let (mut source_reset_rx, mut source_packet_rx) = source_delegate.into_parts();
 
     'main: loop {
       select! {
-        // CANCEL SAFETY: `recv_packet` uses `broadcast::Receiver::recv` internally
-        // which is cancel safe.
-        packet = source_delegate.recv_packet() => {
+        // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
+        reset = source_reset_rx.recv() => {
+          // If the source reader had an error and reinitialized its reader, then regained
+          // the connection, we must reinitialize our muxer as well to cope.
+          match reset {
+            Ok(media_info) => {
+              tracing::trace!("reinitializing muxer");
+              let new_muxer = rtp_muxer::make_rtp_muxer()
+                .await
+                .and_then(|mut rtp_muxer| {
+                  for stream_info in media_info.streams {
+                    tracing::trace!(
+                      stream_index=stream_info.index,
+                      "reinitializing muxer: adding stream to muxer",
+                    );
+                    rtp_muxer = rtp_muxer.with_stream(stream_info)?;
+                  }
+                  Ok(rtp_muxer)
+                });
+
+              match new_muxer {
+                Ok(new_muxer) => {
+                  muxer = new_muxer;
+                },
+                Err(err) => {
+                  tracing::error!(%err, %id, "failed to reinitialize muxer");
+                },
+              };
+            },
+            Err(_) => {
+              tracing::error!(%id, "source broken");
+              break;
+            },
+          }
+        },
+        // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
+        packet = source_packet_rx.recv() => {
           match packet {
-            Some(packet) => {
+            Ok(packet) => {
               let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
               muxer = muxed;
 
@@ -186,7 +221,7 @@ impl Session {
                 }
               }
             }
-            None => {
+            Err(_) => {
               tracing::error!(%id, "source broken");
               break;
             },
