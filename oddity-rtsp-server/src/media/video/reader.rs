@@ -38,14 +38,21 @@ pub fn into_stream(
   stream_index: usize,
 ) -> impl Stream<Item=Result<video::Packet>> {
   stream::unfold(reader, move |mut local_reader| async move {
-    // TODO maybe map end-of-stream to `None` here and handle
-    // appropriately
     let (packet, reader) = task::spawn_blocking(move || {
         let packet = local_reader.read(stream_index);
         (packet, local_reader)
       })
       .await
       .unwrap();
-    Some((packet, reader))
+
+    match packet {
+      Err(video::Error::ReadExhausted) => {
+        // If we reached EOF, map to `None` value
+        None
+      },
+      _ => {
+        Some((packet, reader))
+      }
+    }
   })
 }
