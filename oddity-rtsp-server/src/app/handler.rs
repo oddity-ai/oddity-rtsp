@@ -33,7 +33,7 @@ impl AppHandler {
   pub async fn handle(
     &self,
     request: &Request,
-    responder: ResponseSenderTx,
+    responder: &ResponseSenderTx,
   ) -> Response {
     tracing::trace!(%request, "handling request");
 
@@ -143,7 +143,7 @@ impl AppHandler {
         let session_setup = match SessionSetup::from_rtsp_candidate_transports(
           transport,
           media_info,
-          responder,
+          responder.clone(),
         ).await {
           Ok(session_setup) => session_setup,
           Err(SessionSetupError::TransportNotSupported) |

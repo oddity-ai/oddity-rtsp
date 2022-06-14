@@ -106,9 +106,7 @@ impl Connection {
         request = inbound.next() => {
           match request {
             Some(Ok(request)) => {
-              // TODO can we make it so that it only is cloned when really needed
-              // since this is just wasteful
-              let response = handler.handle(&request, response_tx.clone()).await;
+              let response = handler.handle(&request, &response_tx).await;
               let response = ResponseMaybeInterleaved::Message(response);
               if let Err(err) = outbound.send(response).await {
                 tracing::error!(%err, %id, %addr, "connection: failed to send response");
