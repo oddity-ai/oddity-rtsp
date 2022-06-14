@@ -12,6 +12,7 @@ pub use sdp::{
   NetworkType,
   AddressType,
   Tag,
+  Direction,
   Kind,
   Protocol,
 };

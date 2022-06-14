@@ -6,6 +6,7 @@ use oddity_sdp_protocol::{
   Kind,
   Protocol,
   CodecInfo,
+  Direction,
 };
 
 use crate::media::MediaDescriptor;
@@ -82,6 +83,7 @@ pub async fn create(
       TARGET_DUMMY_PORT,
       Protocol::RtpAvp,
       codec_info,
+      Direction::ReceiveOnly,
     );
 
   tracing::trace!(%sdp, "generated sdp");

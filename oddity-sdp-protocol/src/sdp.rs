@@ -111,13 +111,17 @@ impl Sdp {
     port: u16,
     protocol: Protocol,
     codec_info: CodecInfo,
+    direction: Direction,
   ) -> Self {
+    let mut tags = codec_info.media_attributes();
+    tags.push(Tag::Property(direction.to_string()));
+
     self.media.push(Media {
       kind,
       port,
       protocol,
       format: FMT_RTP_PAYLOAD_DYNAMIC,
-      tags: codec_info.media_attributes(),
+      tags,
     });
     self
   }
@@ -263,6 +267,24 @@ impl fmt::Display for Tag {
     match self {
       Tag::Property(value)        => write!(f, "{value}"),
       Tag::Value(variable, value) => write!(f, "{variable}:{value}"),
+    }
+  }
+
+}
+
+pub enum Direction {
+  ReceiveOnly,
+  SendOnly,
+  SendAndReceive,
+}
+
+impl fmt::Display for Direction {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Direction::ReceiveOnly => write!(f, "recvonly"),
+      Direction::SendOnly => write!(f, "sendonly"),
+      Direction::SendAndReceive => write!(f, "sendrecv"),
     }
   }
 
