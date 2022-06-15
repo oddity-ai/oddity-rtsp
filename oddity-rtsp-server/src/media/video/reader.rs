@@ -1,61 +1,161 @@
-//! Async wrapper functions for [`oddity_video::Reader`].
-
-use futures::Stream;
-use futures::stream;
+use std::thread;
 
 use tokio::task;
+use tokio::sync::mpsc;
 
-use oddity_video::{self as video, Reader};
+use oddity_video as video;
+
+use crate::media::{MediaDescriptor, MediaInfo};
 
 type Result<T> = std::result::Result<T, video::Error>;
 
-// TODO! refactor this to wrap `Reader` in async version that also
-// exports the original API which is required for the other todo.
-
-pub async fn make_reader_with_sane_settings(
-  locator: video::Locator,
-) -> Result<Reader> {
-  task::spawn_blocking(move || {
-      let options = match locator {
-        video::Locator::Path(_) => {
-          Default::default()
-        },
-        video::Locator::Url(_) => {
-          // For streaming sources (live sources), we want to use TCP transport
-          // over UDP and have sane timeouts.
-          video::Options::new_with_rtsp_transport_tcp_and_sane_timeouts()
-        }
-      };
-
-      Reader::new_with_options(
-        &locator,
-        &options,
-      )
-    })
-    .await
-    .unwrap()
+pub struct StreamReader {
+  pub info: MediaInfo,
+  handle: Option<thread::JoinHandle<()>>,
+  packet_rx: mpsc::UnboundedReceiver<Result<video::Packet>>,
+  stop_tx: mpsc::UnboundedSender<()>,
 }
 
-pub fn into_stream(
-  reader: Reader,
-  stream_index: usize,
-) -> impl Stream<Item=Result<video::Packet>> {
-  stream::unfold(reader, move |mut local_reader| async move {
-    let (packet, reader) = task::spawn_blocking(move || {
-        let packet = local_reader.read(stream_index);
-        (packet, local_reader)
-      })
-      .await
-      .unwrap();
+impl StreamReader {
 
-    match packet {
-      Err(video::Error::ReadExhausted) => {
-        // If we reached EOF, map to `None` value
-        None
-      },
-      _ => {
-        Some((packet, reader))
+  pub async fn new(
+    descriptor: &MediaDescriptor,
+  ) -> Result<Self> {
+    let is_file = if let MediaDescriptor::File(_) = &descriptor { true } else { false };
+
+    tracing::trace!(%descriptor, "initializing reader");
+    let inner = backend::make_reader_with_sane_settings(descriptor.clone().into()).await?;
+    tracing::trace!(%descriptor, "initialized reader");
+
+    let info = MediaInfo::from_reader_best_video_stream(&inner)?;
+    let stream_index = info.streams[0].index;
+    tracing::trace!(%descriptor, stream_index=stream_index, "selected video stream");
+
+    let (packet_tx, packet_rx) = mpsc::unbounded_channel();
+    let (stop_tx, stop_rx) = mpsc::unbounded_channel();
+
+    tracing::trace!(%descriptor, "starting stream reader");
+    let handle = thread::spawn(
+      move || Self::run(
+        inner,
+        stream_index,
+        packet_tx,
+        stop_rx,
+        is_file,
+      )
+    );
+    tracing::trace!(%descriptor, "started stream reader");
+
+    Ok(Self {
+      handle: Some(handle),
+      info,
+      packet_rx,
+      stop_tx,
+    })
+  }
+
+  pub async fn read(&mut self) -> Option<Result<video::Packet>> {
+    self.packet_rx.recv().await
+  }
+
+  pub async fn stop(&mut self) {
+    if let Ok(()) = self.stop_tx.send(()) {
+      if let Some(handle) = self.handle.take() {
+        tracing::trace!("sending stop signal to stream reader");
+        let _ = task::spawn_blocking(|| handle.join()).await;
+        tracing::trace!("stopped stream reader");
       }
     }
-  })
+  }
+
+  fn run(
+    mut reader: video::Reader,
+    stream_index: usize,
+    packet_tx: mpsc::UnboundedSender<Result<video::Packet>>,
+    mut stop_rx: mpsc::UnboundedReceiver<()>,
+    is_file: bool,
+  ) {
+    loop {
+      match stop_rx.try_recv() {
+        Ok(()) |
+        Err(mpsc::error::TryRecvError::Disconnected) => {
+          tracing::trace!("stopping stream reader");
+          break;
+        },
+        Err(mpsc::error::TryRecvError::Empty) => {}
+      };
+
+      let read = reader.read(stream_index);
+
+      if is_file {
+        // To pretend the file is a live stream, we need to wait a bit after
+        // each packet or we'll overload the consumer.
+        if let Ok(packet) = read.as_ref() {
+          thread::sleep(packet.duration());
+        }
+      }
+
+      if let Err(video::Error::ReadExhausted) = read.as_ref() {
+        tracing::trace!("seeking to beginning of file after stream exhausted");
+        if let Err(err) = reader.seek(0) {
+          tracing::error!(%err, "failed to seek to beginning of file");
+          break;
+        }
+      }
+
+      if let Err(_) = packet_tx.send(read) {
+        tracing::trace!("packet channel broke");
+        break;
+      }
+    }
+  }
+
+}
+
+impl Drop for StreamReader {
+
+  fn drop(&mut self) {
+    if self.handle.is_some() {
+      panic!("Dropped `StreamReader` whilst running.");
+    }
+  }
+
+}
+
+// Holds functions that deal with the video backend stuff in `oddity_video`.
+pub mod backend {
+
+  use tokio::task;
+
+  use oddity_video::{
+    Reader,
+    Options,
+    Locator,
+    Error,
+  };
+
+  pub async fn make_reader_with_sane_settings(
+    locator: Locator,
+  ) -> Result<Reader, Error> {
+    task::spawn_blocking(move || {
+        let options = match locator {
+          Locator::Path(_) => {
+            Default::default()
+          },
+          Locator::Url(_) => {
+            // For streaming sources (live sources), we want to use TCP transport
+            // over UDP and have sane timeouts.
+            Options::new_with_rtsp_transport_tcp_and_sane_timeouts()
+          }
+        };
+
+        Reader::new_with_options(
+          &locator,
+          &options,
+        )
+      })
+      .await
+      .unwrap()
+  }
+
 }
