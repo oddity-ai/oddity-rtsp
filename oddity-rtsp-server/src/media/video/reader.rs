@@ -95,17 +95,36 @@ impl StreamReader {
         }
       }
 
-      if let Err(video::Error::ReadExhausted) = read.as_ref() {
-        tracing::trace!("seeking to beginning of file after stream exhausted");
-        if let Err(err) = reader.seek(0) {
-          tracing::error!(%err, "failed to seek to beginning of file");
+      let packet = match read {
+        // Forward OK packets.
+        Ok(packet) => {
+          Some(Ok(packet))
+        },
+        // If the error was caused by an exhausted stream, try and see if we
+        // can seek to the beginning of the file and then just keep reading:
+        // we don't send a packet and just continue the loop in that case. If
+        // seeking fails, forward the error.
+        Err(video::Error::ReadExhausted) => {
+          tracing::trace!("seeking to beginning of file after stream exhausted");
+          match reader.seek(0) {
+            Ok(()) => None,
+            Err(err) => {
+              tracing::error!(%err, "failed to seek to beginning of file");
+              Some(Err(err))
+            }
+          }
+        },
+        // Forward any errors.
+        Err(err) => {
+          Some(Err(err))
+        },
+      };
+
+      if let Some(packet) = packet {
+        if let Err(_) = packet_tx.send(packet) {
+          tracing::trace!("packet channel broke");
           break;
         }
-      }
-
-      if let Err(_) = packet_tx.send(read) {
-        tracing::trace!("packet channel broke");
-        break;
       }
     }
   }
