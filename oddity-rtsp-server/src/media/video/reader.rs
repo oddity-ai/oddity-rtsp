@@ -107,7 +107,11 @@ impl StreamReader {
         Err(video::Error::ReadExhausted) => {
           tracing::trace!("seeking to beginning of file after stream exhausted");
           match reader.seek(0) {
-            Ok(()) => None,
+            Ok(()) => {
+              // TODO! seeking will cause DTS to reset, but we want it to increase
+              // monotically at all times
+              None
+            }
             Err(err) => {
               tracing::error!(%err, "failed to seek to beginning of file");
               Some(Err(err))
