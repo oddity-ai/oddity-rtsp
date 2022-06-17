@@ -75,6 +75,8 @@ impl StreamReader {
     mut stop_rx: mpsc::UnboundedReceiver<()>,
     is_file: bool,
   ) {
+    let mut times = Times::new();
+
     loop {
       match stop_rx.try_recv() {
         Ok(()) |
@@ -91,13 +93,17 @@ impl StreamReader {
         // To pretend the file is a live stream, we need to wait a bit after
         // each packet or we'll overload the consumer.
         if let Ok(packet) = read.as_ref() {
-          thread::sleep(packet.duration());
+          thread::sleep(packet.duration().into());
         }
       }
 
       let packet = match read {
         // Forward OK packets.
-        Ok(packet) => {
+        Ok(mut packet) => {
+          // Update internal times and possibly adjust packet timings to account
+          // for rewinds that happened before.
+          times.update(&mut packet);
+
           Some(Ok(packet))
         },
         // If the error was caused by an exhausted stream, try and see if we
@@ -106,10 +112,12 @@ impl StreamReader {
         // seeking fails, forward the error.
         Err(video::Error::ReadExhausted) => {
           tracing::trace!("seeking to beginning of file after stream exhausted");
-          match reader.seek(0) {
+          match reader.seek_to_start() {
             Ok(()) => {
-              // TODO! seeking will cause DTS to reset, but we want it to increase
-              // monotically at all times
+              // To fix the DTS after having seeked, we update the current DTS
+              // offset and apply it to each packet.
+              times.update_offset();
+
               None
             }
             Err(err) => {
@@ -141,6 +149,43 @@ impl Drop for StreamReader {
     if self.handle.is_some() {
       panic!("Dropped `StreamReader` whilst running.");
     }
+  }
+
+}
+
+struct Times {
+  current_dts: Option<video::Time>,
+  current_dts_offset: Option<video::Time>,
+  current_pts: Option<video::Time>,
+  current_pts_offset: Option<video::Time>,
+}
+
+impl Times {
+
+  pub fn new() -> Self {
+    Times {
+      current_dts: None,
+      current_dts_offset: None,
+      current_pts: None,
+      current_pts_offset: None,
+    }
+  }
+
+  pub fn update(&mut self, packet: &mut video::Packet) {
+    if let Some(current_dts_offset) = self.current_dts_offset.as_ref() {
+      packet.set_dts(&packet.dts().aligned_with(current_dts_offset).add());
+    }
+    if let Some(current_pts_offset) = self.current_pts_offset.as_ref() {
+      packet.set_pts(&packet.pts().aligned_with(current_pts_offset).add());
+    }
+
+    self.current_dts = Some(packet.dts().aligned_with(&packet.duration()).add());
+    self.current_pts = Some(packet.pts().aligned_with(&packet.duration()).add());
+  }
+
+  pub fn update_offset(&mut self) {
+    self.current_dts_offset = self.current_dts.clone();
+    self.current_pts_offset = self.current_pts.clone();
   }
 
 }

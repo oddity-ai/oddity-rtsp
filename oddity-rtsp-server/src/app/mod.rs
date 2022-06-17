@@ -66,8 +66,8 @@ impl App {
     self.server.stop().await;
     {
       let mut context = self.context.lock().await;
-      context.source_manager.stop().await;
       context.session_manager.stop().await;
+      context.source_manager.stop().await;
     }
     self.runtime.stop().await;
   }
