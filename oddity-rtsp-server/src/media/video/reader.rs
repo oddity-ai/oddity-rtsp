@@ -100,9 +100,11 @@ impl StreamReader {
       let packet = match read {
         // Forward OK packets.
         Ok(mut packet) => {
-          // Update internal times and possibly adjust packet timings to account
-          // for rewinds that happened before.
-          times.update(&mut packet);
+          // Manually keep time for file-based streams. This way we can seek
+          // in the file and pretend that time is still running linearly.
+          if is_file {
+            times.update(&mut packet);
+          }
 
           Some(Ok(packet))
         },
@@ -114,12 +116,8 @@ impl StreamReader {
           tracing::trace!("seeking to beginning of file after stream exhausted");
           match reader.seek_to_start() {
             Ok(()) => {
-              // To fix the DTS after having seeked, we update the current DTS
-              // offset and apply it to each packet.
-              times.update_offset();
-
               None
-            }
+            },
             Err(err) => {
               tracing::error!(%err, "failed to seek to beginning of file");
               Some(Err(err))
@@ -154,38 +152,26 @@ impl Drop for StreamReader {
 }
 
 struct Times {
-  current_dts: Option<video::Time>,
-  current_dts_offset: Option<video::Time>,
-  current_pts: Option<video::Time>,
-  current_pts_offset: Option<video::Time>,
+  next_dts: video::Time,
+  next_pts: video::Time,
 }
 
 impl Times {
 
   pub fn new() -> Self {
     Times {
-      current_dts: None,
-      current_dts_offset: None,
-      current_pts: None,
-      current_pts_offset: None,
+      next_dts: video::Time::zero(),
+      next_pts: video::Time::zero(),
     }
   }
 
   pub fn update(&mut self, packet: &mut video::Packet) {
-    if let Some(current_dts_offset) = self.current_dts_offset.as_ref() {
-      packet.set_dts(&packet.dts().aligned_with(current_dts_offset).add());
+    if packet.duration().has_value() {
+      packet.set_dts(&self.next_dts);
+      packet.set_pts(&self.next_pts);
+      self.next_dts = self.next_dts.aligned_with(&packet.duration()).add();
+      self.next_pts = self.next_pts.aligned_with(&packet.duration()).add();
     }
-    if let Some(current_pts_offset) = self.current_pts_offset.as_ref() {
-      packet.set_pts(&packet.pts().aligned_with(current_pts_offset).add());
-    }
-
-    self.current_dts = Some(packet.dts().aligned_with(&packet.duration()).add());
-    self.current_pts = Some(packet.pts().aligned_with(&packet.duration()).add());
-  }
-
-  pub fn update_offset(&mut self) {
-    self.current_dts_offset = self.current_dts.clone();
-    self.current_pts_offset = self.current_pts.clone();
   }
 
 }
