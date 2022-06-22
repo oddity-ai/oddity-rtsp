@@ -18,6 +18,13 @@ use crate::session::session_manager::RegisterSessionError;
 use crate::session::setup::{SessionSetup, SessionSetupError};
 use crate::app::AppContext;
 
+/// Identifies the server by its product name and version. We use
+/// the built-in `concat` and `env` macros to construct this string
+/// using the Cargo-provided metadata. It will look something like
+/// this: `oddity-rtsp-server/0.1.0`.
+static SERVER: &str =
+  concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
 pub struct AppHandler {
   context: Arc<Mutex<AppContext>>,
 }
@@ -305,6 +312,7 @@ fn reply_to_options_with_supported_methods(
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .with_header(
       "Public",
       "OPTIONS, DESCRIBE, SETUP, PLAY, TEARDOWN")
@@ -318,6 +326,7 @@ fn reply_to_describe_with_media_sdp(
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .with_sdp(sdp_contents)
     .build()
 }
@@ -330,6 +339,7 @@ fn reply_to_setup(
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .with_header("Session", session_id)
     .with_header("Transport", transport)
     .build()
@@ -341,6 +351,7 @@ fn reply_to_teardown(
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -351,6 +362,7 @@ fn reply_to_play(
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .with_header("Range", range)
     .build()
 }
@@ -361,6 +373,7 @@ fn reply_bad_request(
 ) -> Response {
   Response::error(Status::BadRequest)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -373,6 +386,7 @@ fn reply_option_not_supported(
     "client asked for feature that is not supported");
   Response::error(Status::OptionNotSupported)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -386,6 +400,7 @@ fn reply_method_not_supported(
     "client sent unsupported request");
   Response::error(Status::MethodNotAllowed)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -400,6 +415,7 @@ fn reply_method_not_valid(
     does client think it is server?");
   Response::error(Status::MethodNotValidInThisState)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -413,6 +429,7 @@ fn reply_not_acceptable(
     by client");
   Response::error(Status::NotAcceptable)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -426,6 +443,7 @@ fn reply_not_found(
     "path not registered as media item");
   Response::error(Status::NotFound)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -438,6 +456,7 @@ fn reply_aggregate_operation_not_allowed(
     "refusing to do aggregate request");
   Response::error(Status::AggregateOperationNotAllowed)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -450,6 +469,7 @@ fn reply_unsupported_transport(
     "unsupported transport");
   Response::error(Status::UnsupportedTransport)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -462,6 +482,7 @@ fn reply_session_not_found(
     "session not found");
   Response::error(Status::SessionNotFound)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -474,6 +495,7 @@ fn reply_not_implemented(
     "not implemented");
   Response::error(Status::NotImplemented)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -486,6 +508,7 @@ fn reply_header_field_not_valid(
     "header field not valid");
   Response::error(Status::HeaderFieldNotValid)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
 
@@ -495,5 +518,6 @@ fn reply_internal_server_error(
 ) -> Response {
   Response::error(Status::InternalServerError)
     .with_cseq_of(request)
+    .with_header("Server", SERVER)
     .build()
 }
