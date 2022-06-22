@@ -60,7 +60,7 @@ a source, and any clients will see the file on repeat, as if it were a live
 stream.
 
 ```
-Sources:                                                        Sessions:
+Sources:                                                 Sessions:
 
                                                           🖥 ️ 
 ┌──────────────────────┐                                 ┌────────────────┐
