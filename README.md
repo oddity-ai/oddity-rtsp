@@ -35,7 +35,7 @@ Play the file using `ffmpeg`:
 ffplay "rtsp://localhost:5554/example"
 ```
 
-Refer to the [configuration](#configuration) section for more information
+Refer to the [configuration](#-configuration) section for more information
 on how to set it up.
 
 ## ✅ Features
