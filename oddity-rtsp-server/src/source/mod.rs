@@ -24,6 +24,9 @@ pub type SourceStateRx = mpsc::UnboundedReceiver<SourceState>;
 pub type SourceMediaInfoTx = broadcast::Sender<media::MediaInfo>;
 pub type SourceMediaInfoRx = broadcast::Receiver<media::MediaInfo>;
 
+pub type SourceStreamStateTx = broadcast::Sender<media::StreamState>;
+pub type SourceStreamStateRx = broadcast::Receiver<media::StreamState>;
+
 pub type SourceResetTx = broadcast::Sender<media::MediaInfo>;
 pub type SourceResetRx = broadcast::Receiver<media::MediaInfo>;
 
@@ -32,6 +35,7 @@ pub type SourcePacketRx = broadcast::Receiver<media::Packet>;
 
 pub enum SourceControlMessage {
   StreamInfo,
+  StreamState,
 }
 
 pub type SourceControlTx = mpsc::UnboundedSender<SourceControlMessage>;
@@ -43,15 +47,16 @@ pub struct Source {
   pub descriptor: MediaDescriptor,
   control_tx: SourceControlTx,
   media_info_tx: SourceMediaInfoTx,
+  stream_state_tx: SourceStreamStateTx,
   reset_tx: SourceResetTx,
   packet_tx: SourcePacketTx,
   worker: Task,
 }
 
 impl Source {
-  /// Any more than 16 stream info messages on the queue probably means
+  /// Any more than 16 media/stream info messages on the queue probably means
   /// something is really wrong and the server is overloaded.
-  const MAX_QUEUED_MEDIA_INFO: usize = 16;
+  const MAX_QUEUED_INFO: usize = 16;
 
   /// Any more than 1024 packets queued probably indicates the server is
   /// terribly overloaded/broken.
@@ -71,8 +76,9 @@ impl Source {
     let stream_reader = StreamReader::new(&descriptor).await?;
 
     let (control_tx, control_rx) = mpsc::unbounded_channel();
-    let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_MEDIA_INFO);
-    let (reset_tx, _) = broadcast::channel(Self::MAX_QUEUED_MEDIA_INFO);
+    let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
+    let (stream_state_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
+    let (reset_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
     let (packet_tx, _) = broadcast::channel(Self::MAX_QUEUED_PACKETS);
 
     tracing::trace!(name, %path, "starting source");
@@ -82,6 +88,7 @@ impl Source {
         let path = path.clone();
         let descriptor = descriptor.clone();
         let media_info_tx = media_info_tx.clone();
+        let stream_state_tx = stream_state_tx.clone();
         let reset_tx = reset_tx.clone();
         let packet_tx = packet_tx.clone();
         move |task_context| {
@@ -92,6 +99,7 @@ impl Source {
             control_rx,
             state_tx,
             media_info_tx,
+            stream_state_tx,
             reset_tx,
             packet_tx,
             task_context,
@@ -107,6 +115,7 @@ impl Source {
       descriptor,
       control_tx,
       media_info_tx,
+      stream_state_tx,
       reset_tx,
       packet_tx,
       worker,
@@ -123,6 +132,7 @@ impl Source {
     SourceDelegate {
       control_tx: self.control_tx.clone(),
       media_info_rx: self.media_info_tx.subscribe(),
+      stream_state_rx: self.stream_state_tx.subscribe(),
       reset_rx: self.reset_tx.subscribe(),
       packet_rx: self.packet_tx.subscribe(),
     }
@@ -135,6 +145,7 @@ impl Source {
     mut control_rx: SourceControlRx,
     state_tx: SourceStateTx,
     media_info_tx: SourceMediaInfoTx,
+    stream_state_tx: SourceStreamStateTx,
     reset_tx: SourceResetTx,
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
@@ -166,7 +177,10 @@ impl Source {
           message = control_rx.recv() => {
             match message {
               Some(SourceControlMessage::StreamInfo) => {
-                let _ =  media_info_tx.send(stream_reader.info.clone());
+                let _ = media_info_tx.send(stream_reader.info.clone());
+              },
+              Some(SourceControlMessage::StreamState) => {
+                // TODO
               },
               None => {
                 tracing::error!(%path, "source control channel broke unexpectedly");
@@ -236,6 +250,7 @@ impl Source {
 pub struct SourceDelegate {
   control_tx: SourceControlTx,
   media_info_rx: SourceMediaInfoRx,
+  stream_state_rx: SourceStreamStateRx,
   reset_rx: SourceResetRx,
   packet_rx: SourcePacketRx,
 }
@@ -245,6 +260,14 @@ impl SourceDelegate {
   pub async fn query_media_info(&mut self) -> Option<media::MediaInfo> {
     if let Ok(()) = self.control_tx.send(SourceControlMessage::StreamInfo) {
       self.media_info_rx.recv().await.ok()
+    } else {
+      None
+    }
+  }
+
+  pub async fn query_stream_state(&mut self) -> Option<media::StreamState> {
+    if let Ok(()) = self.control_tx.send(SourceControlMessage::StreamState) {
+      self.stream_state_rx.recv().await.ok()
     } else {
       None
     }

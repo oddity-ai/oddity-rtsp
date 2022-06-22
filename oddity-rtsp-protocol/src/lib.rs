@@ -7,6 +7,7 @@ mod response;
 mod buffer;
 mod transport;
 mod range;
+mod rtp_info;
 mod io;
 mod error;
 
@@ -42,6 +43,7 @@ pub use range::{
   Range,
   NptTime,
 };
+pub use rtp_info::RtpInfo;
 pub use io::{
   RtspWriter,
   RtspReader,

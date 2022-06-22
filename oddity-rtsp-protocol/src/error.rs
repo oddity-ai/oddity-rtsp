@@ -150,6 +150,24 @@ pub enum Error {
   RangeNptTimeMalfored {
     value: String,
   },
+  /// RTP Info must always contain a URL.
+  RtpInfoUrlMissing {
+    value: String,
+  },
+  /// RTP Info parameter is not known. This means that the RTP part
+  /// contains an unknown or non-existant parameter variable.
+  RtpInfoParameterUnknown {
+    value: String,
+  },
+  /// RTP Info parameter is invalid. This happens, for example, when
+  /// the `seq` parameter is not an integer.
+  RtpInfoParameterInvalid {
+    value: String,
+  },
+  /// RTP Info contains unexpected extra parameter.
+  RtpInfoParameterUnexpected {
+    value: String,
+  },
   /// Underlying socket was shut down. This is not really an error and
   /// consumers are expected to handle it gracefully.
   Shutdown,
@@ -225,6 +243,14 @@ impl fmt::Display for Error {
         write!(f, "range time not supported: {}", &value),
       Error::RangeNptTimeMalfored { value } =>
         write!(f, "range npt time malformed: {}", &value),
+      Error::RtpInfoUrlMissing { value } =>
+        write!(f, "rtp info url missing: {}", &value),
+      Error::RtpInfoParameterUnknown { value } =>
+        write!(f, "rtp info parameter unknown: {}", &value),
+      Error::RtpInfoParameterInvalid { value } =>
+        write!(f, "rtp info parameter invalid: {}", &value),
+      Error::RtpInfoParameterUnexpected { value } =>
+        write!(f, "rtp info contains unexpected parameter: {}", &value),
       Error::Shutdown =>
         write!(f, "underlying socket was shut down"),
       Error::Io(err) =>

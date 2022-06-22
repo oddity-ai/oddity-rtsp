@@ -9,6 +9,7 @@ use oddity_rtsp_protocol::{
   Status,
   Transport,
   Range,
+  RtpInfo,
   Error,
 };
 
@@ -225,7 +226,8 @@ impl AppHandler {
                 // Either just echo back the range the client requested, since
                 // we accepted it it will be correct or just generate a generic
                 // `now-` range.
-                range.unwrap_or_else(|| Range::new_for_live())
+                range.unwrap_or_else(|| Range::new_for_live()),
+                // TODO! fetch rtp info here and use it
               )
             },
             Some(Err(PlaySessionError::RangeNotSupported)) => {
@@ -359,9 +361,11 @@ fn reply_to_teardown(
 fn reply_to_play(
   request: &Request,
   range: Range,
+  rtp_info: RtpInfo,
 ) -> Response {
   Response::ok()
     .with_cseq_of(request)
+    .with_rtp_info([rtp_info])
     .with_header("Server", SERVER)
     .with_header("Range", range)
     .build()

@@ -13,6 +13,7 @@ use super::{
     status_to_reason,
   },
   request::Request,
+  rtp_info::RtpInfo,
 };
 
 #[derive(Clone, Debug)]
@@ -156,6 +157,21 @@ impl ResponseBuilder {
     val: impl ToString,
   ) -> ResponseBuilder {
     self.response.headers.insert(var.to_string(), val.to_string());
+    self
+  }
+
+  pub fn with_rtp_info(
+    mut self,
+    rtp_info: impl IntoIterator<Item=RtpInfo>,
+  ) -> ResponseBuilder {
+    self.response.headers.insert(
+      "RTP-Info".to_string(),
+      rtp_info
+        .into_iter()
+        .map(|item| item.to_string())
+        .collect::<Vec<_>>()
+        .join(","),
+    );
     self
   }
 
