@@ -1,5 +1,6 @@
 use std::fmt;
 use std::sync::Arc;
+use std::io::ErrorKind;
 
 use futures::SinkExt;
 
@@ -9,7 +10,12 @@ use tokio::net;
 use tokio_stream::StreamExt;
 use tokio_util::codec;
 
-use oddity_rtsp_protocol::{Codec, AsServer, ResponseMaybeInterleaved};
+use oddity_rtsp_protocol::{
+  Codec,
+  AsServer,
+  ResponseMaybeInterleaved,
+  Error,
+};
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
@@ -113,13 +119,18 @@ impl Connection {
                 break;
               }
             },
-            Some(Err(err)) => {
-              tracing::error!(%err, %id, %addr, "connection: failed to read request");
-              break;
-            },
             None => {
               disconnected = true;
               tracing::info!(%id, %addr, "connection: client disconnected");
+              break;
+            },
+            Some(Err(Error::Io(err))) if err.kind() == ErrorKind::ConnectionReset => {
+              disconnected = true;
+              tracing::info!(%id, %addr, "connection: client disconnected (reset)");
+              break;
+            },
+            Some(Err(err)) => {
+              tracing::error!(%err, %id, %addr, "connection: failed to read request");
               break;
             },
           }
