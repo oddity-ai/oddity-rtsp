@@ -5,10 +5,8 @@
     <img alt="Oddity.ai" src="https://oddity.ai/img/logo_full.png" height="64px">
   </picture>
   <br/>
-  <br/>
   <h1 align="center">RTSP Server</h1>
   <p align="center">RTSP server built in Rust.</p>
-  <br/>
 </p>
 
 ## ⚡ Quickstart
