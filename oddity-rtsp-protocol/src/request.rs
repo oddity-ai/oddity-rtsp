@@ -44,6 +44,10 @@ impl Message for Request {
 
 impl Request {
 
+  pub fn uri(&self) -> &Uri {
+    &self.uri
+  }
+
   pub fn path(&self) -> &str {
     self.uri
       .path()

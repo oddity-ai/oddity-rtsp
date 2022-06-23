@@ -8,6 +8,7 @@ use std::error;
 
 use tokio::select;
 use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 
 use rand::Rng;
 
@@ -18,6 +19,7 @@ use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::source::SourceDelegate;
 use crate::session::setup::{SessionSetup, SessionSetupTarget};
+use crate::media;
 use crate::media::video::rtp_muxer;
 
 pub enum SessionState {
@@ -27,8 +29,11 @@ pub enum SessionState {
 pub type SessionStateTx = mpsc::UnboundedSender<SessionState>;
 pub type SessionStateRx = mpsc::UnboundedReceiver<SessionState>;
 
+pub type SessionStreamStateTx = broadcast::Sender<media::StreamState>;
+
 pub enum SessionControlMessage {
   Play,
+  StreamState,
 }
 
 pub type SessionControlTx = mpsc::UnboundedSender<SessionControlMessage>;
@@ -37,9 +42,13 @@ pub type SessionControlRx = mpsc::UnboundedReceiver<SessionControlMessage>;
 pub struct Session {
   worker: Task,
   control_tx: SessionControlTx,
+  stream_state_tx: SessionStreamStateTx,
 }
 
 impl Session {
+  /// Any more than 16 media/stream info messages on the queue probably means
+  /// something is really wrong and the server is overloaded.
+  const MAX_QUEUED_INFO: usize = 16;
 
   pub async fn setup_and_start(
     id: SessionId,
@@ -49,12 +58,14 @@ impl Session {
     runtime: &Runtime,
   ) -> Self {
     let (control_tx, control_rx) = mpsc::unbounded_channel();
+    let (stream_state_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
 
     tracing::trace!(%id, "starting session");
     let worker = runtime
       .task()
       .spawn({
         let id = id.clone();
+        let stream_state_tx = stream_state_tx.clone();
         |task_context| {
           Self::run(
             id,
@@ -62,6 +73,7 @@ impl Session {
             setup,
             control_rx,
             state_tx,
+            stream_state_tx,
             task_context,
           )
         }
@@ -72,10 +84,14 @@ impl Session {
     Self {
       worker,
       control_tx,
+      stream_state_tx,
     }
   }
 
-  pub fn play(&mut self, range: Option<rtsp::Range>) -> Result<(), PlaySessionError> {
+  pub async fn play(
+    &mut self,
+    range: Option<rtsp::Range>,
+  ) -> Result<media::StreamState, PlaySessionError> {
     if let Some(range) = range.as_ref() {
       tracing::trace!(%range, "checking if provided range is valid and supported");
       if !Self::is_range_supported(range) {
@@ -84,6 +100,19 @@ impl Session {
       }
     }
 
+    let mut stream_state_rx = self.stream_state_tx.subscribe();
+    tracing::trace!("querying session for stream state");
+    self
+      .control_tx
+      .send(SessionControlMessage::StreamState)
+      .map_err(|_| PlaySessionError::ControlBroken)?;
+
+    let stream_state = stream_state_rx
+      .recv()
+      .await
+      .map_err(|_| PlaySessionError::ControlBroken)?;
+    tracing::trace!("received stream state");
+
     tracing::trace!("sending play signal to session");
     self
       .control_tx
@@ -91,7 +120,7 @@ impl Session {
       .map_err(|_| PlaySessionError::ControlBroken)?;
     tracing::trace!("session playing");
 
-    Ok(())
+    Ok(stream_state)
   }
 
   pub async fn teardown(&mut self) {
@@ -106,6 +135,7 @@ impl Session {
     setup: SessionSetup,
     control_rx: SessionControlRx,
     state_tx: SessionStateTx,
+    stream_state_tx: SessionStreamStateTx,
     task_context: TaskContext,
   ) {
     let muxer = setup.rtp_muxer;
@@ -122,6 +152,7 @@ impl Session {
           muxer,
           target,
           control_rx,
+          stream_state_tx,
           task_context,
         ).await;
       },
@@ -136,9 +167,12 @@ impl Session {
     mut muxer: video::RtpMuxer,
     target: setup::SendInterleaved,
     mut control_rx: SessionControlRx,
+    stream_state_tx: SessionStreamStateTx,
     mut task_context: TaskContext,
   ) {
     let mut state = SessionMediaState::Ready;
+    let mut need_stream_state = false;
+
     let (mut source_reset_rx, mut source_packet_rx) = source_delegate.into_parts();
 
     'main: loop {
@@ -184,6 +218,19 @@ impl Session {
             Ok(packet) => {
               let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
               muxer = muxed;
+
+              if need_stream_state {
+                tracing::trace!(%id, "fetching stream state");
+                let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
+                let stream_state = media::StreamState {
+                  rtp_seq,
+                  rtp_timestamp,
+                };
+                tracing::trace!(%id, rtp_seq, rtp_timestamp, "fetched stream state");
+                let _ = stream_state_tx.send(stream_state);
+
+                need_stream_state = false;
+              }
 
               let packet = match packet {
                 Ok(packet) => packet,
@@ -233,6 +280,10 @@ impl Session {
             Some(SessionControlMessage::Play) => {
               state = SessionMediaState::Playing;
               tracing::info!(%id, "session now playing");
+            },
+            Some(SessionControlMessage::StreamState) => {
+              need_stream_state = true;
+              tracing::trace!(%id, "set need stream state flag");
             },
             None => {
               tracing::error!(%id, "session control channel broke unexpectedly");

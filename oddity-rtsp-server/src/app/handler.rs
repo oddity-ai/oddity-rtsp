@@ -220,15 +220,20 @@ impl AppHandler {
               .session_manager
               .play(&session_id.into(), range.clone())
               .await {
-            Some(Ok(())) => {
-              reply_to_play(
-                request,
-                // Either just echo back the range the client requested, since
-                // we accepted it it will be correct or just generate a generic
-                // `now-` range.
-                range.unwrap_or_else(|| Range::new_for_live()),
-                // TODO! fetch rtp info here and use it
-              )
+            Some(Ok(stream_state)) => {
+              // Either just echo back the range the client requested, since
+              // we accepted it it will be correct or just generate a generic
+              // `now-` range.
+              let range = range.unwrap_or_else(|| Range::new_for_live());
+              // Construct RTP-Info based on the request URI, and the stream
+              // state, which includes the last RTP sequence number, and the
+              // current RTP timestamp.
+              let rtp_info = RtpInfo::new_with_timing(
+                &request.uri().to_string(),
+                stream_state.rtp_seq,
+                stream_state.rtp_timestamp,
+              );
+              reply_to_play(request, range, rtp_info)
             },
             Some(Err(PlaySessionError::RangeNotSupported)) => {
               tracing::error!(

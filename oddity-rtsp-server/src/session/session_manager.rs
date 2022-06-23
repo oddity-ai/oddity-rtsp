@@ -21,6 +21,7 @@ use crate::session::{
   SessionStateRx,
   PlaySessionError,
 };
+use crate::media;
 
 type SessionMap = Arc<Mutex<HashMap<SessionId, Session>>>;
 
@@ -104,10 +105,10 @@ impl SessionManager {
     &mut self,
     id: &SessionId,
     range: Option<rtsp::Range>,
-  ) -> Option<Result<(), PlaySessionError>> {
+  ) -> Option<Result<media::StreamState, PlaySessionError>> {
     if let Some(session) = self.sessions.lock().await.get_mut(id) {
       tracing::trace!(session_id=%id, "start playing");
-      Some(session.play(range))
+      Some(session.play(range).await)
     } else {
       tracing::trace!(
         session_id=%id,

@@ -63,5 +63,5 @@ impl MediaInfo {
 #[derive(Clone)]
 pub struct StreamState {
   pub rtp_seq: u16,
-  pub rtp_time: u32,
+  pub rtp_timestamp: u32,
 }

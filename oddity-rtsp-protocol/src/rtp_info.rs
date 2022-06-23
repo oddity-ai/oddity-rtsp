@@ -54,12 +54,12 @@ impl RtpInfo {
 impl fmt::Display for RtpInfo {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "{}", self.url)?;
+    write!(f, "url={}", self.url)?;
     if let Some(seq) = self.seq {
-      write!(f, ";{}", seq)?;
+      write!(f, ";seq={}", seq)?;
     }
     if let Some(rtptime) = self.rtptime {
-      write!(f, ";{}", rtptime)?;
+      write!(f, ";rtptime={}", rtptime)?;
     }
     Ok(())
   }
