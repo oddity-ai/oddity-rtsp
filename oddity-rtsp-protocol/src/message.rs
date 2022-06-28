@@ -11,7 +11,7 @@ use super::{
 pub use http::uri::Uri;
 pub use bytes::Bytes;
 
-pub trait Message: Serialize {
+pub trait Message: Serialize + fmt::Display {
   type Metadata: Parse;
 
   fn new(

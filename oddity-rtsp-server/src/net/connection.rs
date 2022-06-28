@@ -13,6 +13,7 @@ use tokio_util::codec;
 use oddity_rtsp_protocol::{
   Codec,
   AsServer,
+  RequestMaybeInterleaved,
   ResponseMaybeInterleaved,
   Error,
 };
@@ -98,9 +99,17 @@ impl Connection {
         message = response_rx.recv() => {
           match message {
             Some(message) => {
-              if let Err(err) = outbound.send(message).await {
-                tracing::error!(%err, %id, %addr, "connection: failed to send message");
-                break;
+              match outbound.send(message).await {
+                Ok(()) => {},
+                Err(Error::Io(err)) if err.kind() == ErrorKind::ConnectionReset => {
+                  disconnected = true;
+                  tracing::info!(%id, %addr, "connection: client disconnected (reset)");
+                  break;
+                },
+                Err(err) => {
+                  tracing::error!(%err, %id, %addr, "connection: failed to send message");
+                  break;
+                }
               }
             },
             None => {
@@ -112,11 +121,18 @@ impl Connection {
         request = inbound.next() => {
           match request {
             Some(Ok(request)) => {
-              let response = handler.handle(&request, &response_tx).await;
-              let response = ResponseMaybeInterleaved::Message(response);
-              if let Err(err) = outbound.send(response).await {
-                tracing::error!(%err, %id, %addr, "connection: failed to send response");
-                break;
+              match request {
+                RequestMaybeInterleaved::Message(request) => {
+                  let response = handler.handle(&request, &response_tx).await;
+                  let response = ResponseMaybeInterleaved::Message(response);
+                  if let Err(err) = outbound.send(response).await {
+                    tracing::error!(%err, %id, %addr, "connection: failed to send response");
+                    break;
+                  }
+                },
+                RequestMaybeInterleaved::Interleaved { channel, .. } => {
+                  tracing::debug!(%id, %addr, %channel, "ignored request with interleaved data");
+                },
               }
             },
             None => {

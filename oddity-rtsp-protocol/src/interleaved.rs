@@ -3,10 +3,13 @@ use std::fmt;
 use bytes::{
   Bytes,
   BytesMut,
+  Buf,
   BufMut,
 };
 
 use super::{
+  message::Message,
+  request::Request,
   response::Response,
   serialize::Serialize,
   error::{
@@ -15,26 +18,46 @@ use super::{
   },
 };
 
-pub enum ResponseMaybeInterleaved {
-  Message(Response),
+pub const MAGIC: u8 = 0x24; // $
+
+pub type ChannelId = u8;
+
+pub type RequestMaybeInterleaved = MaybeInterleaved<Request>;
+pub type ResponseMaybeInterleaved = MaybeInterleaved<Response>;
+
+pub enum MaybeInterleaved<M: Message> {
+  Message(M),
   Interleaved {
-    channel: u8,
+    channel: ChannelId,
     payload: Bytes,
   }
 }
 
-impl Serialize for ResponseMaybeInterleaved {
+impl<M: Message> fmt::Display for MaybeInterleaved<M> {
+
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      Self::Message(message)
+        => write!(f, "{}", message),
+      Self::Interleaved { channel, payload }
+        => write!(f, "interleaved payload over channel: {}, size: {}", channel, payload.len()),
+    }
+  }
+
+}
+
+impl<M: Message> Serialize for MaybeInterleaved<M> {
 
   fn serialize(self, dst: &mut BytesMut) -> Result<()> {
     match self {
-      ResponseMaybeInterleaved::Message(response) => {
+      Self::Message(response) => {
         response.serialize(dst)
       },
-      ResponseMaybeInterleaved::Interleaved {
+      Self::Interleaved {
         channel,
         payload,
       } => {
-        dst.put_u8(0x24); // $
+        dst.put_u8(MAGIC); // $
         dst.put_u8(channel);
         dst.put_u16(payload
           .len()
@@ -50,14 +73,47 @@ impl Serialize for ResponseMaybeInterleaved {
 
 }
 
-impl fmt::Display for ResponseMaybeInterleaved {
+pub struct InterleavedParser {
+  channel_and_size: Option<(u8, u16)>,
+}
 
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      ResponseMaybeInterleaved::Message(message)
-        => write!(f, "{}", message),
-      ResponseMaybeInterleaved::Interleaved { channel, payload }
-        => write!(f, "interleaved payload over channel: {}, size: {}", channel, payload.len()),
+impl InterleavedParser {
+
+  pub fn new() -> Self {
+    Self {
+      channel_and_size: None,
+    }
+  }
+
+  pub fn parse(
+    &mut self,
+    buffer: &mut impl Buf,
+  ) -> Option<Result<(ChannelId, Bytes)>> {
+    if let Some((channel, size)) = self.channel_and_size {
+      if buffer.remaining() >= size.into() {
+        let payload = buffer.copy_to_bytes(size.into());
+        Some(Ok((channel, payload)))
+      } else {
+        None
+      }
+    } else {
+      if buffer.remaining() >= 4 {
+        let header = &buffer.chunk()[..4];
+        if header[0] != MAGIC {
+          return Some(Err(Error::InterleavedInvalid));
+        }
+
+        let channel = header[1];
+        let size = u16::from_be_bytes([header[2], header[3]]);
+
+        self.channel_and_size = Some((channel, size));
+
+        buffer.advance(4);
+
+        self.parse(buffer)
+      } else {
+        None
+      }
     }
   }
 

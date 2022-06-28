@@ -31,7 +31,11 @@ pub use message::{
 };
 pub use request::Request;
 pub use response::Response;
-pub use interleaved::ResponseMaybeInterleaved;
+pub use interleaved::{
+  MaybeInterleaved,
+  RequestMaybeInterleaved,
+  ResponseMaybeInterleaved,
+};
 pub use transport::{
   Transport,
   Parameter,
@@ -45,12 +49,6 @@ pub use range::{
 };
 pub use rtp_info::RtpInfo;
 pub use io::{
-  RtspWriter,
-  RtspReader,
-  RtspRequestWriter,
-  RtspResponseReader,
-  RtspResponseWriter,
-  RtspRequestReader,
   Target,
   AsClient,
   AsServer,

@@ -36,16 +36,14 @@ pub enum Status {
   Done,
 }
 
-pub struct Parser<M: Message>
-{
+pub struct Parser<M: Message> {
   state: State,
   metadata: Option<M::Metadata>,
   headers: Headers,
   body: Option<Bytes>,
 }
 
-impl<M: Message> Parser<M>
-{
+impl<M: Message> Parser<M> {
 
   pub fn new() -> Self {
     Self {

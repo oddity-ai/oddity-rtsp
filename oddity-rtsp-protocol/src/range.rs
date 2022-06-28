@@ -33,6 +33,7 @@ impl Range {
 impl fmt::Display for Range {
 
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "npt=")?;
     match (self.start.as_ref(), self.end.as_ref()) {
       (Some(start), Some(end))
         => write!(f, "{}-{}", start, end),

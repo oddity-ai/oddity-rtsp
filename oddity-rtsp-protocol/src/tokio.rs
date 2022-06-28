@@ -11,51 +11,102 @@ use super::{
     Status,
   },
   serialize::Serialize,
+  interleaved::{
+    self,
+    InterleavedParser,
+    MaybeInterleaved,
+  },
   error::Error,
   io::Target,
 };
 
 pub struct Codec<T: Target> {
+  state: State,
   parser: Parser<T::Inbound>,
+  interleaved_parser: InterleavedParser,
+}
+
+enum State {
+  Init,
+  ParseMessage,
+  ParseInterleaved,
 }
 
 impl<T: Target> Codec<T> {
 
   pub fn new() -> Self {
     Self {
-      parser: Parser::new(),
+      state: State::Init,
+      parser: Parser::<T::Inbound>::new(),
+      interleaved_parser: InterleavedParser::new(),
     }
   }
 
 }
 
 impl<T: Target> Decoder for Codec<T> {
-  type Item = T::Inbound;
+  type Item = MaybeInterleaved<T::Inbound>;
   type Error = Error;
 
   fn decode(
     &mut self,
     src: &mut BytesMut,
   ) -> Result<Option<Self::Item>, Self::Error> {
-    Ok(match self.parser.parse(src)? {
-      Status::Done => {
-        // Extract parser and replace with all new one since this one
-        // is now consumed and we don't need it anymore
-        let parser = std::mem::replace(&mut self.parser, Parser::<T::Inbound>::new());
-        Some(parser.into_message()?)
+    if let State::Init = self.state {
+      if src.len() > 0 {
+        if src[0] == interleaved::MAGIC {
+          self.state = State::ParseInterleaved;
+        } else {
+          self.state = State::ParseMessage;
+        }
+      } else {
+        return Ok(None);
+      }
+    };
+
+    match &mut self.state {
+      State::Init => unreachable!(),
+      State::ParseMessage => {
+        match self.parser.parse(src)? {
+          Status::Done => {
+            self.state = State::Init;
+            let parser = std::mem::replace(&mut self.parser, Parser::<T::Inbound>::new());
+            Ok(Some(
+              parser
+                .into_message()
+                .map(MaybeInterleaved::<T::Inbound>::Message)?
+            ))
+          },
+          Status::Hungry => Ok(None),
+        }
       },
-      Status::Hungry => None,
-    })
+      State::ParseInterleaved => {
+        match self.interleaved_parser.parse(src) {
+          Some(parsed) => {
+            let (channel, payload) = parsed?;
+            self.state = State::Init;
+            self.interleaved_parser = InterleavedParser::new();
+            Ok(Some(
+              MaybeInterleaved::<T::Inbound>::Interleaved {
+                channel,
+                payload,
+              }
+            ))
+          },
+          None => Ok(None),
+        }
+      },
+    }
   }
 
 }
 
-impl<T: Target> Encoder<T::Outbound> for Codec<T> {
+impl<T: Target> Encoder<MaybeInterleaved<T::Outbound>> for Codec<T> {
   type Error = Error;
 
   fn encode(
     &mut self,
-    item: T::Outbound,
+    item: MaybeInterleaved<T::Outbound>,
     dst: &mut BytesMut,
   ) -> Result<(), Self::Error> {
     item.serialize(dst)
