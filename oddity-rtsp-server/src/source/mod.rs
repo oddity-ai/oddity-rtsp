@@ -186,7 +186,7 @@ impl Source {
       // one to stop and wait for it to do so.
       stream_reader.stop().await;
 
-      tracing::trace!(%path, "attempting to restart stream");
+      tracing::info!(%path, "attempting to restart stream");
       'restart: loop {
         match StreamReader::new(&descriptor).await {
           Ok(new_stream_reader) => {
@@ -196,7 +196,7 @@ impl Source {
             // reset their muxers and continue playing.
             let _ = reset_tx.send(stream_reader.info.clone());
 
-            tracing::trace!(%path, "restarted stream");
+            tracing::info!(%path, "restarted stream");
             break 'restart;
           },
           Err(err) => {
