@@ -15,6 +15,6 @@ futures = "0.3"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1" }
 tokio-util = { version = "0.7.1", default-features = false, features = ["codec"] }
+video-rs = "0.1"
 oddity-rtsp-protocol = { path = "../oddity-rtsp-protocol", features = ["tokio-codec"] }
 oddity-sdp-protocol = { path = "../oddity-sdp-protocol" }
-oddity-video = { path = "../../oddity-video" } # Fix this weird dep path

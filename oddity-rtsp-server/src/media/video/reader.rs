@@ -3,7 +3,7 @@ use std::thread;
 use tokio::task;
 use tokio::sync::mpsc;
 
-use oddity_video as video;
+use video_rs as video;
 
 use crate::media::{MediaDescriptor, MediaInfo};
 
@@ -176,12 +176,12 @@ impl Times {
 
 }
 
-// Holds functions that deal with the video backend stuff in `oddity_video`.
+// Holds functions that deal with the video backend stuff in `video_rs`.
 pub mod backend {
 
   use tokio::task;
 
-  use oddity_video::{
+  use video_rs::{
     Reader,
     Options,
     Locator,

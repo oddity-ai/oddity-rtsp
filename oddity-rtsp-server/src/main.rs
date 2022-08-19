@@ -17,7 +17,7 @@ use app::config::AppConfig;
 
 use tokio::signal::ctrl_c;
 
-use oddity_video as video;
+use video_rs as video;
 
 macro_rules! on_error_exit {
   ($expr:expr) => {

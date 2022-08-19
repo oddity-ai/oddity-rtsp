@@ -1,14 +1,14 @@
 pub mod sdp;
 pub mod video;
 
-use oddity_video::StreamInfo;
+use video_rs::StreamInfo;
 
-pub use oddity_video::Packet;
+pub use video_rs::Packet;
 
 use std::path::PathBuf;
 use std::fmt;
 
-use oddity_video::{Reader, Locator, Url, Error};
+use video_rs::{Reader, Locator, Url, Error};
 
 type Result<T> = std::result::Result<T, Error>;
 

@@ -2,7 +2,7 @@ use std::fmt;
 use std::error;
 use std::net::SocketAddr;
 
-use oddity_video as video;
+use video_rs as video;
 use oddity_rtsp_protocol as rtsp;
 
 use crate::net::connection::ResponseSenderTx;

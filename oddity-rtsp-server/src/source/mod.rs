@@ -7,7 +7,7 @@ use tokio::time::timeout;
 use tokio::sync::mpsc;
 use tokio::sync::broadcast;
 
-use oddity_video as video;
+use video_rs as video;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};

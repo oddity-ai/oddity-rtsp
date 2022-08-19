@@ -7,7 +7,7 @@ use tokio::select;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
 
-use oddity_video::Error as MediaError;
+use video_rs::Error as MediaError;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};

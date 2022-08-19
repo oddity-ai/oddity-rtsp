@@ -1,8 +1,8 @@
-//! Async wrapper functions for [`oddity_video::RtpMuxer`].
+//! Async wrapper functions for [`video_rs::RtpMuxer`].
 
 use tokio::task;
 
-use oddity_video::{self as video, RtpMuxer};
+use video_rs::{self as video, RtpMuxer};
 
 type Result<T> = std::result::Result<T, video::Error>;
 

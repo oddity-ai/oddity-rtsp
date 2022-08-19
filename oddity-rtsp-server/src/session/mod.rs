@@ -13,7 +13,7 @@ use tokio::sync::broadcast;
 use rand::Rng;
 
 use oddity_rtsp_protocol as rtsp;
-use oddity_video as video;
+use video_rs as video;
 
 use crate::runtime::Runtime;
 use crate::runtime::task_manager::{Task, TaskContext};
