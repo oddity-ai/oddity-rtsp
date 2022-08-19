@@ -93,7 +93,7 @@ pub async fn create(
 #[derive(Debug)]
 pub enum SdpError {
   CodecNotSupported,
-  Media(oddity_video::Error),
+  Media(video_rs::Error),
 }
 
 impl fmt::Display for SdpError {
