@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://oddity.ai/img/logo_full_light.png">
     <source media="(prefers-color-scheme: light)" srcset="https://oddity.ai/img/logo_full.png">
-    <img alt="Oddity.ai" src="https://oddity.ai/img/logo_full.png" height="64px">
+    <img alt="Oddity.ai" src="https://oddity.ai/img/logo_full.png" height="45px">
   </picture>
   <br/>
   <h1 align="center">RTSP Server</h1>
@@ -144,7 +144,7 @@ LOG=oddity_rtsp_server=trace oddity-rtsp-server
 You can also display log messages from the ffmpeg backend, like so:
 
 ```sh
-LOG=oddity_rtsp_server=trace,oddity_video=trace oddity-rtsp-server
+LOG=oddity_rtsp_server=trace,video=trace oddity-rtsp-server
 ```
 
 Or simply enable all tracing messages:
