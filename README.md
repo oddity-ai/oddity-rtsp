@@ -11,7 +11,7 @@
 
 ## ⚡ Quickstart
 
-Download, compile and run the RTSP server with a simple configuration file:
+Download, compile (with Cargo) and run the RTSP server with a simple configuration file:
 
 ```sh
 git clone git@github.com:oddity-ai/oddity-rtsp.git
