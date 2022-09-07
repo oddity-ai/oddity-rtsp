@@ -125,9 +125,17 @@ impl Connection {
                 RequestMaybeInterleaved::Message(request) => {
                   let response = handler.handle(&request, &response_tx).await;
                   let response = ResponseMaybeInterleaved::Message(response);
-                  if let Err(err) = outbound.send(response).await {
-                    tracing::error!(%err, %id, %addr, "connection: failed to send response");
-                    break;
+                  match outbound.send(response).await {
+                    Ok(()) => {},
+                    Err(Error::Io(err)) if err.kind() == ErrorKind::ConnectionReset => {
+                      disconnected = true;
+                      tracing::info!(%id, %addr, "connection: client disconnected (reset)");
+                      break;
+                    },
+                    Err(err) => {
+                      tracing::error!(%err, %id, %addr, "connection: failed to send response");
+                      break;
+                    },
                   }
                 },
                 RequestMaybeInterleaved::Interleaved { channel, .. } => {
