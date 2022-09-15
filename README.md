@@ -122,7 +122,7 @@ Note: To run the above example, the server must be called with superuser privili
 because it uses a protected port (554):
 
 ```sh
-LOG=oddity_rtsp_server=info sudo ./oddity-rtsp-server
+sudo LOG=oddity_rtsp_server=info ./oddity-rtsp-server
 ```
 
 ### Logging
