@@ -95,7 +95,7 @@ server:
   host: 0.0.0.0
   port: 554
 
-sources:
+media:
   - name: "Name of Source"
     path: "/url/to/source"
     kind: file
