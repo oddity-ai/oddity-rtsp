@@ -68,7 +68,6 @@ impl Source {
     runtime: &Runtime,
   ) -> Result<Self, video::Error> {
     let path = normalize_path(path);
-    let stream_reader = StreamReader::new(&descriptor).await?;
 
     let (control_tx, control_rx) = mpsc::unbounded_channel();
     let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
@@ -88,7 +87,6 @@ impl Source {
           Self::run(
             path,
             descriptor,
-            stream_reader,
             control_rx,
             state_tx,
             media_info_tx,
@@ -131,7 +129,6 @@ impl Source {
   async fn run(
     path: SourcePath,
     descriptor: MediaDescriptor,
-    mut stream_reader: StreamReader,
     mut control_rx: SourceControlRx,
     state_tx: SourceStateTx,
     media_info_tx: SourceMediaInfoTx,
@@ -139,8 +136,60 @@ impl Source {
     packet_tx: SourcePacketTx,
     mut task_context: TaskContext,
   ) {
+    let mut outer_stream_reader = match StreamReader::new(&descriptor).await {
+      Ok(stream_reader) => Some(stream_reader),
+      Err(err) => {
+        tracing::error!(
+          %err, %descriptor,
+          "failed to start stream",
+        );
+        None
+      },
+    };
+
     'outer: loop {
-      'inner: loop {
+      let mut stream_reader = match outer_stream_reader {
+        Some(stream_reader) => stream_reader,
+        None => {
+          'restart: loop {
+            match StreamReader::new(&descriptor).await {
+              Ok(new_stream_reader) => {
+                // Send reset with new media information to listeners so they can
+                // reset their muxers and continue playing.
+                let _ = reset_tx.send(new_stream_reader.info.clone());
+
+                tracing::info!(%path, "restarted stream");
+                break new_stream_reader;
+              },
+              Err(err) => {
+                tracing::error!(
+                  %err, %descriptor, retry_delay=Self::RETRY_DELAY_SECS,
+                  "failed to restart stream (waiting before retrying)",
+                );
+                // We want to wait some time before retrying. We wrap `wait_for_stop` in
+                // a timeout to achieve this ...
+                match timeout(
+                  time::Duration::from_secs(Self::RETRY_DELAY_SECS),
+                  task_context.wait_for_stop(),
+                ).await {
+                  Ok(()) => {
+                    tracing::trace!(%path, "stopping source (during stream restart)");
+                    // If `wait_for_stop` returns, we break out of the outer loop and stop ...
+                    break 'outer;
+                  },
+                  Err(_) => {
+                    // But if the timeout is reached, we simply restart this loop to try and
+                    // see if we can get the stream reader to work this time.
+                    continue 'restart;
+                  },
+                }
+              },
+            }
+          }
+        }
+      };
+
+      'read: loop {
         select! {
           // CANCEL SAFETY: `StreamReader::read` uses `mpsc::UnboundedReceiver::recv`
           // internally which is cancel safe.
@@ -151,14 +200,11 @@ impl Source {
               },
               Some(Err(err)) => {
                 tracing::error!(%path, %err, "failed to read video stream");
-
-                // We can assume more failures are coming from the reader so let's
-                // break out of the reading loop and restart it.
-                break 'inner;
+                break 'read;
               },
               None => {
                 tracing::error!(%path, "stream reader broken unexpectedly");
-                break 'inner;
+                break 'read;
               },
             };
           },
@@ -170,6 +216,7 @@ impl Source {
               },
               None => {
                 tracing::error!(%path, "source control channel broke unexpectedly");
+                stream_reader.stop().await;
                 break 'outer;
               },
             };
@@ -177,6 +224,7 @@ impl Source {
           // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
           _ = task_context.wait_for_stop() => {
             tracing::trace!(%path, "stopping source");
+            stream_reader.stop().await;
             break 'outer;
           },
         }
@@ -186,47 +234,10 @@ impl Source {
       // one to stop and wait for it to do so.
       stream_reader.stop().await;
 
-      tracing::info!(%path, "attempting to restart stream");
-      'restart: loop {
-        match StreamReader::new(&descriptor).await {
-          Ok(new_stream_reader) => {
-            stream_reader = new_stream_reader;
-
-            // Send reset with new media information to listeners so they can
-            // reset their muxers and continue playing.
-            let _ = reset_tx.send(stream_reader.info.clone());
-
-            tracing::info!(%path, "restarted stream");
-            break 'restart;
-          },
-          Err(err) => {
-            tracing::error!(
-              %err, %descriptor, retry_delay=Self::RETRY_DELAY_SECS,
-              "failed to restart stream (waiting before retrying)",
-            );
-            // We want to wait some time before retrying. We wrap `wait_for_stop` in
-            // a timeout to achieve this ...
-            match timeout(
-              time::Duration::from_secs(Self::RETRY_DELAY_SECS),
-              task_context.wait_for_stop(),
-            ).await {
-              Ok(()) => {
-                tracing::trace!(%path, "stopping source (during stream restart)");
-                // If `wait_for_stop` returns, we break out of the outer loop and stop ...
-                break 'outer;
-              },
-              Err(_) => {
-                // But if the timeout is reached, we simply restart this loop to try and
-                // see if we can get the stream reader to work this time.
-                continue 'restart;
-              },
-            }
-          },
-        }
-      }
+      // Reset the outer stream reader so that it will be reinitialized during
+      // the next outer loop cycle.
+      outer_stream_reader = None;
     }
-
-    stream_reader.stop().await;
 
     let _ = state_tx.send(SourceState::Stopped(path));
   }
