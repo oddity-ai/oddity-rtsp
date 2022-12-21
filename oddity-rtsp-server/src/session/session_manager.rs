@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::collections::{HashMap, hash_map::Entry};
 
 use tokio::select;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::sync::mpsc;
 
 use oddity_rtsp_protocol as rtsp;
@@ -23,7 +23,8 @@ use crate::session::{
 };
 use crate::media;
 
-type SessionMap = Arc<Mutex<HashMap<SessionId, Session>>>;
+type SessionShared = Arc<Mutex<Session>>;
+type SessionMap = Arc<RwLock<HashMap<SessionId, SessionShared>>>;
 
 pub struct SessionManager {
   sessions: SessionMap,
@@ -37,7 +38,7 @@ impl SessionManager {
   pub async fn start(
     runtime: Arc<Runtime>,
   ) -> Self {
-    let sessions = Arc::new(Mutex::new(HashMap::new()));
+    let sessions = Arc::new(RwLock::new(HashMap::new()));
     let (session_state_tx, session_state_rx) =
       mpsc::unbounded_channel();
 
@@ -69,30 +70,30 @@ impl SessionManager {
     tracing::trace!("sending stop signal to session manager");
     self.worker.stop().await;
     tracing::trace!("session manager stopped");
-    for (_, mut session) in self.sessions.lock().await.drain() {
-      session.teardown().await;
+    for (_, session) in self.sessions.write().await.drain() {
+      session.lock().await.teardown().await;
     }
   }
 
   pub async fn setup(
-    &mut self,
+    &self,
     source_delegate: SourceDelegate,
     setup: SessionSetup,
   ) -> Result<SessionId, RegisterSessionError> {
     let session_id = SessionId::generate();
+    let session = Session::setup_and_start(
+      session_id.clone(),
+      source_delegate,
+      setup,
+      self.session_state_tx.clone(),
+      self.runtime.as_ref(),
+    ).await;
+
     if let Entry::Vacant(entry) = self
         .sessions
-        .lock().await
+        .write().await
         .entry(session_id.clone()) {
-      let _ = entry.insert(
-        Session::setup_and_start(
-          session_id.clone(),
-          source_delegate,
-          setup,
-          self.session_state_tx.clone(),
-          self.runtime.as_ref(),
-        ).await
-      );
+      let _ = entry.insert(Arc::new(Mutex::new(session)));
       tracing::trace!(%session_id, "registered new session");
       Ok(session_id)
     } else {
@@ -102,13 +103,14 @@ impl SessionManager {
   }
 
   pub async fn play(
-    &mut self,
+    &self,
     id: &SessionId,
     range: Option<rtsp::Range>,
   ) -> Option<Result<media::StreamState, PlaySessionError>> {
-    if let Some(session) = self.sessions.lock().await.get_mut(id) {
+    let session = self.sessions.read().await.get(id).cloned();
+    if let Some(session) = session {
       tracing::trace!(session_id=%id, "start playing");
-      Some(session.play(range).await)
+      Some(session.lock().await.play(range).await)
     } else {
       tracing::trace!(
         session_id=%id,
@@ -119,12 +121,13 @@ impl SessionManager {
   }
 
   pub async fn teardown(
-    &mut self,
+    &self,
     id: &SessionId,
   ) -> bool {
-    if let Some(session) = self.sessions.lock().await.get_mut(id) {
+    let session = self.sessions.read().await.get(id).cloned();
+    if let Some(session) = session {
       tracing::trace!(session_id=%id, "tearing down session");
-      session.teardown().await;
+      session.lock().await.teardown().await;
       tracing::trace!(session_id=%id, "torn down session");
       true
     } else {
@@ -147,7 +150,7 @@ impl SessionManager {
         state = session_state_rx.recv() => {
           match state {
             Some(SessionState::Stopped(session_id)) => {
-              let _ = sessions.lock().await.remove(&session_id);
+              let _ = sessions.write().await.remove(&session_id);
               tracing::trace!(%session_id, "session manager: received stopped");
             },
             None => {

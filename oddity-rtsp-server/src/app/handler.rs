@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 use oddity_rtsp_protocol::{
   Request,
@@ -27,12 +27,12 @@ static SERVER: &str =
   concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
 
 pub struct AppHandler {
-  context: Arc<Mutex<AppContext>>,
+  context: Arc<RwLock<AppContext>>,
 }
 
 impl AppHandler {
 
-  pub fn new(context: Arc<Mutex<AppContext>>) -> Self {
+  pub fn new(context: Arc<RwLock<AppContext>>) -> Self {
     Self {
       context,
     }
@@ -291,8 +291,8 @@ impl AppHandler {
   }
 
   #[inline]
-  async fn use_context(&self) -> MutexGuard<'_, AppContext> {
-    self.context.lock().await
+  async fn use_context(&self) -> RwLockReadGuard<'_, AppContext> {
+    self.context.read().await
   }
 
 }

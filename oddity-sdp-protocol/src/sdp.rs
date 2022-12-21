@@ -12,6 +12,7 @@ use super::{
   time::unix_epoch_timestamp,
 };
 
+#[derive(Debug, Clone)]
 pub struct Sdp {
   /* v= */
   pub version: Version,
@@ -169,6 +170,8 @@ impl fmt::Display for Sdp {
   }
 
 }
+
+#[derive(Debug, Clone)]
 pub struct Media {
   /* m= */
   pub kind: Kind,
@@ -199,6 +202,7 @@ impl fmt::Display for Media {
 
 }
 
+#[derive(Debug, Clone)]
 pub struct Timing {
   pub start: u64,
   pub stop: u64,
@@ -212,6 +216,7 @@ impl fmt::Display for Timing {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum Version {
   V0,
 }
@@ -226,6 +231,7 @@ impl fmt::Display for Version {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum NetworkType {
   Internet,
 }
@@ -240,6 +246,7 @@ impl fmt::Display for NetworkType {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum AddressType {
   IpV4,
   IpV6,
@@ -256,6 +263,7 @@ impl fmt::Display for AddressType {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum Tag {
   Property(String),
   Value(String, String),
@@ -272,6 +280,7 @@ impl fmt::Display for Tag {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum Direction {
   ReceiveOnly,
   SendOnly,
@@ -290,6 +299,7 @@ impl fmt::Display for Direction {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum Kind {
   Video,
   Audio,
@@ -312,6 +322,7 @@ impl fmt::Display for Kind {
 
 }
 
+#[derive(Debug, Clone)]
 pub enum Protocol {
   RtpAvp,
   RtpSAvp,

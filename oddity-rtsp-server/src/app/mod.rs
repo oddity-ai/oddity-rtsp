@@ -4,7 +4,7 @@ pub mod handler;
 use std::error::Error;
 use std::sync::Arc;
 
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::runtime::Runtime;
 use crate::net::server::Server;
@@ -27,7 +27,7 @@ macro_rules! handle_err {
 
 pub struct App {
   server: Server,
-  context: Arc<Mutex<AppContext>>,
+  context: Arc<RwLock<AppContext>>,
   runtime: Arc<Runtime>,
 }
 
@@ -45,7 +45,7 @@ impl App {
       ).await
     )?;
 
-    let context = Arc::new(Mutex::new(context));
+    let context = Arc::new(RwLock::new(context));
     let server = handle_err!(
       runtime,
       initialize_server(
@@ -64,11 +64,8 @@ impl App {
 
   pub async fn stop(&mut self) {
     self.server.stop().await;
-    {
-      let mut context = self.context.lock().await;
-      context.session_manager.stop().await;
-      context.source_manager.stop().await;
-    }
+    self.context.write().await.session_manager.stop().await;
+    self.context.write().await.source_manager.stop().await;
     self.runtime.stop().await;
   }
 
@@ -76,7 +73,7 @@ impl App {
 
 async fn initialize_server(
   config: &AppConfig,
-  context: Arc<Mutex<AppContext>>,
+  context: Arc<RwLock<AppContext>>,
   runtime: Arc<Runtime>,
 ) -> Result<Server, Box<dyn Error>> {
   let handler = AppHandler::new(context.clone());
