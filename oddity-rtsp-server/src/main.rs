@@ -34,7 +34,7 @@ macro_rules! on_error_exit {
 #[tokio::main]
 async fn main() {
   on_error_exit!(initialize_tracing());
-  initialize_media();
+  on_error_exit!(initialize_media());
 
   let config = on_error_exit!(initialize_and_read_config());
   tracing::debug!(?config, "loaded config file");
@@ -57,8 +57,8 @@ fn initialize_tracing() -> Result<(), Box<dyn Error + Send + Sync>> {
     .try_init()
 }
 
-fn initialize_media() {
-  video::init();
+fn initialize_media() -> Result<(), Box<dyn Error>> {
+  video::init()
 }
 
 fn initialize_and_read_config() -> Result<AppConfig, ConfigError> {
