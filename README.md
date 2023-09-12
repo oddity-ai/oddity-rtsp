@@ -164,7 +164,18 @@ The repo consists of a number of crates, each with their own specific function:
 
 * `oddity-sdp-protocol`: Parsing and serialization for the SDP protocol.
 
-## License
+## ✨ Credits
+
+`oddity-rtsp` only exists thanks to the following organizations and people:
+
+* All [contributors](https://github.com/oddity-ai/oddity-rtsp/graphs/contributors) for their work!
+* Everyone who worked on [video-rs](https://github.com/oddity-ai/video-rs) since `oddity-rtsp` depends heavily on `video-rs`.
+* Multiple unnamed customers and integrators that helped us develop and troubleshoot the RTSP server and make it ready for production use 💪.
+* [Provincie Utrecht](https://www.provincie-utrecht.nl/) for supporting this project as part of the "Situational Awareness Software" project.
+* [zmwangx](https://github.com/zmwangx) for maintaining [rust-ffmpeg](https://github.com/zmwangx/rust-ffmpeg).
+* The [FFmpeg project](https://ffmpeg.org/) for `ffmpeg` and the `ffmpeg` libraries.
+
+## ⚖️ License
 
 Licensed under either of
 
