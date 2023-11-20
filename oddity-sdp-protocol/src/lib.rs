@@ -1,20 +1,10 @@
-mod sdp;
-mod timing;
 mod codec;
 mod fmt;
 mod ip;
+mod sdp;
 mod time;
+mod timing;
 
-pub use sdp::{
-  Sdp,
-  Timing,
-  Version,
-  NetworkType,
-  AddressType,
-  Tag,
-  Direction,
-  Kind,
-  Protocol,
-};
-pub use timing::TimeRange;
 pub use codec::CodecInfo;
+pub use sdp::{AddressType, Direction, Kind, NetworkType, Protocol, Sdp, Tag, Timing, Version};
+pub use timing::TimeRange;

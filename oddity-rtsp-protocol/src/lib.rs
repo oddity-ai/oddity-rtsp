@@ -1,63 +1,30 @@
-mod parse;
-mod serialize;
-mod message;
+mod buffer;
+mod error;
 mod interleaved;
+mod io;
+mod message;
+mod parse;
+mod range;
 mod request;
 mod response;
-mod buffer;
-mod transport;
-mod range;
 mod rtp_info;
-mod io;
-mod error;
+mod serialize;
+mod transport;
 
 #[cfg(feature = "tokio-codec")]
 mod tokio;
 
-pub use parse::{
-  RequestParser,
-  ResponseParser,
-  Status as ParserStatus,
-};
-pub use message::{
-  Message,
-  Headers,
-  Version,
-  Status,
-  StatusCode,
-  StatusCategory,
-  Uri,
-  Method,
-};
+pub use error::{Error, Result};
+pub use interleaved::{MaybeInterleaved, RequestMaybeInterleaved, ResponseMaybeInterleaved};
+pub use io::{AsClient, AsServer, Target};
+pub use message::{Headers, Message, Method, Status, StatusCategory, StatusCode, Uri, Version};
+pub use parse::{RequestParser, ResponseParser, Status as ParserStatus};
+pub use range::{NptTime, Range};
 pub use request::Request;
 pub use response::Response;
-pub use interleaved::{
-  MaybeInterleaved,
-  RequestMaybeInterleaved,
-  ResponseMaybeInterleaved,
-};
-pub use transport::{
-  Transport,
-  Parameter,
-  Lower,
-  Channel,
-  Port,
-};
-pub use range::{
-  Range,
-  NptTime,
-};
 pub use rtp_info::RtpInfo;
-pub use io::{
-  Target,
-  AsClient,
-  AsServer,
-};
 pub use serialize::Serialize;
-pub use error::{
-  Result,
-  Error,
-};
+pub use transport::{Channel, Lower, Parameter, Port, Transport};
 
 #[cfg(feature = "tokio-codec")]
 pub use tokio::Codec;

@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "oddity-rtsp-protocol",
+    "oddity-rtsp-server",
+    "oddity-sdp-protocol"
+]
