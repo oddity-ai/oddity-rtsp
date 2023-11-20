@@ -30,7 +30,7 @@ impl fmt::Display for MediaDescriptor {
 impl From<MediaDescriptor> for Locator {
     fn from(descriptor: MediaDescriptor) -> Self {
         match descriptor {
-            MediaDescriptor::File(path) => Locator::Path(path.into()),
+            MediaDescriptor::File(path) => Locator::Path(path),
             MediaDescriptor::Stream(url) => Locator::Url(url),
         }
     }

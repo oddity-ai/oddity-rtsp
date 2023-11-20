@@ -28,6 +28,7 @@ impl TaskManager {
         }
     }
 
+    #[allow(clippy::let_underscore_future)]
     pub async fn spawn<F, T>(&self, f: F) -> Task
     where
         F: FnOnce(TaskContext) -> T + Send + 'static,
@@ -39,13 +40,7 @@ impl TaskManager {
         // another task already asked the manager to stop, in
         // which case we ignore the request and don't start a
         // task at all.
-        if let Some(hold_all_tx) = self
-            .hold_tx
-            .lock()
-            .await
-            .as_ref()
-            .map(|hold_tx| hold_tx.clone())
-        {
+        if let Some(hold_all_tx) = self.hold_tx.lock().await.as_ref().cloned() {
             let (hold_tx, hold_rx) = oneshot::channel();
             let (stop_tx, stop_rx) = mpsc::channel(1);
             let stop_all_rx = self.stop_tx.subscribe();

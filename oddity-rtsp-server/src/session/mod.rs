@@ -323,7 +323,7 @@ impl SessionId {
     pub fn generate() -> SessionId {
         SessionId(
             rand::thread_rng()
-                .sample(&rand::distributions::Uniform::from(
+                .sample(rand::distributions::Uniform::from(
                     10_u32.pow(Self::SESSION_ID_LEN - 1)..10_u32.pow(Self::SESSION_ID_LEN),
                 ))
                 .to_string(),

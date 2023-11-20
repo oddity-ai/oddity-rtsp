@@ -126,6 +126,7 @@ impl Source {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn run(
         path: SourcePath,
         descriptor: MediaDescriptor,
@@ -270,7 +271,7 @@ pub type SourcePath = String;
 pub type SourcePathRef = str;
 
 pub fn normalize_path(path: SourcePath) -> SourcePath {
-    if path.starts_with("/") {
+    if path.starts_with('/') {
         path
     } else {
         format!("/{}", &path)

@@ -47,7 +47,7 @@ pub async fn create(name: &str, descriptor: &MediaDescriptor) -> Result<Sdp, Sdp
         // the stream in that case, and return `CodecNotSupported`.
         .filter_map(Result::ok)
         .next()
-        .ok_or_else(|| SdpError::CodecNotSupported)?;
+        .ok_or(SdpError::CodecNotSupported)?;
     tracing::trace!("sdp: found SPS and PPS");
 
     // Since the previous call to `parameter_sets_h264` can only

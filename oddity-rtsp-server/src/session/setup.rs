@@ -24,9 +24,8 @@ impl SessionSetup {
     ) -> Result<Self, SessionSetupError> {
         let transport = candidate_transports
             .into_iter()
-            .filter(|transport| transport::is_supported(&transport))
-            .next()
-            .ok_or_else(|| SessionSetupError::TransportNotSupported)?;
+            .find(transport::is_supported)
+            .ok_or(SessionSetupError::TransportNotSupported)?;
         tracing::trace!(%transport, "selected transport");
 
         tracing::trace!("initializing muxer");
@@ -38,7 +37,7 @@ impl SessionSetup {
                 tracing::trace!(%resolved_transport, "resolved transport");
                 let rtp_target =
                     SessionSetupTarget::from_rtsp_transport(&resolved_transport, sender)
-                        .ok_or_else(|| SessionSetupError::DestinationInvalid)?;
+                        .ok_or(SessionSetupError::DestinationInvalid)?;
                 tracing::debug!(?rtp_target, "calculated target");
 
                 for stream_info in media_info.streams {

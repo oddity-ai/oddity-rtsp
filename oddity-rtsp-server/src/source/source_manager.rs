@@ -74,7 +74,7 @@ impl SourceManager {
     ) -> Result<(), RegisterSourceError> {
         let path = source::normalize_path(path);
         let source = Source::start(
-            name.clone(),
+            name,
             path.clone(),
             descriptor,
             self.source_state_tx.clone(),
@@ -104,13 +104,13 @@ impl SourceManager {
             .source_descriptions_cache
             .read()
             .await
-            .get(path.into())
+            .get(path)
             .cloned();
         if let Some(description) = cached_description {
             tracing::trace!(%path, "pulled SDP from cache");
             Some(Ok(description))
         } else {
-            let source = self.sources.read().await.get(path.into()).cloned();
+            let source = self.sources.read().await.get(path).cloned();
             if let Some(source) = source {
                 let source_name = source.lock().await.name.clone();
                 let source_descriptor = source.lock().await.descriptor.clone();
@@ -131,7 +131,7 @@ impl SourceManager {
     }
 
     pub async fn subscribe(&self, path: &SourcePathRef) -> Option<SourceDelegate> {
-        let source = self.sources.read().await.get(path.into()).cloned();
+        let source = self.sources.read().await.get(path).cloned();
         if let Some(source) = source {
             tracing::trace!(path, "creating source delegate for caller");
             Some(source.lock().await.delegate())

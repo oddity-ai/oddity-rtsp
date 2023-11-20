@@ -206,7 +206,7 @@ impl AppHandler {
                             // Either just echo back the range the client requested, since
                             // we accepted it it will be correct or just generate a generic
                             // `now-` range.
-                            let range = range.unwrap_or_else(|| Range::new_for_live());
+                            let range = range.unwrap_or_else(Range::new_for_live);
                             // Construct RTP-Info based on the request URI, and the stream
                             // state, which includes the last RTP sequence number, and the
                             // current RTP timestamp.

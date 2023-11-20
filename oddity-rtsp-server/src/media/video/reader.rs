@@ -18,11 +18,7 @@ pub struct StreamReader {
 
 impl StreamReader {
     pub async fn new(descriptor: &MediaDescriptor) -> Result<Self> {
-        let is_file = if let MediaDescriptor::File(_) = &descriptor {
-            true
-        } else {
-            false
-        };
+        let is_file = matches!(descriptor, MediaDescriptor::File(_));
 
         tracing::trace!(%descriptor, "initializing reader");
         let inner = backend::make_reader_with_sane_settings(descriptor.clone().into()).await?;
@@ -120,7 +116,7 @@ impl StreamReader {
             };
 
             if let Some(packet) = packet {
-                if let Err(_) = packet_tx.send(packet) {
+                if packet_tx.send(packet).is_err() {
                     tracing::trace!("packet channel broke");
                     break;
                 }

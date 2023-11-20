@@ -15,11 +15,9 @@ pub fn resolve_transport(rtsp_transport: &rtsp::Transport) -> rtsp::Transport {
 pub fn is_supported(transport: &rtsp::Transport) -> bool {
     return transport
         .lower_protocol()
-        .map(|lower| is_lower_protocol_supported(lower))
+        .map(is_lower_protocol_supported)
         .unwrap_or(true)
-        && transport
-            .parameters_iter()
-            .all(|parameter| is_parameter_supported(parameter));
+        && transport.parameters_iter().all(is_parameter_supported);
 }
 
 fn is_lower_protocol_supported(lower: &rtsp::Lower) -> bool {
