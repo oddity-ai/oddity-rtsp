@@ -106,6 +106,12 @@ impl Transport {
     }
 }
 
+impl Default for Transport {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl fmt::Display for Transport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RTP/AVP")?;
@@ -130,7 +136,7 @@ impl FromStr for Transport {
 
         if spec.starts_with("RTP/AVP") {
             let lower = spec
-                .split("/")
+                .split('/')
                 .nth(2)
                 .map(|lower| lower.parse())
                 .transpose()?;
@@ -138,7 +144,7 @@ impl FromStr for Transport {
             let parameters = params
                 .map(|params| {
                     params
-                        .split(";")
+                        .split(';')
                         .map(|p| p.parse())
                         .collect::<Result<Vec<_>, _>>()
                 })
@@ -246,7 +252,7 @@ impl FromStr for Parameter {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split("=");
+        let mut parts = s.split('=');
         let var = parts
             .next()
             .ok_or_else(|| Error::TransportParameterInvalid {
@@ -315,9 +321,9 @@ impl FromStr for Parameter {
             "mode" => {
                 let val = val_or_err()?;
                 let val = val
-                    .strip_prefix("\"")
+                    .strip_prefix('"')
                     .unwrap_or(val)
-                    .strip_suffix("\"")
+                    .strip_suffix('"')
                     .unwrap_or(val);
                 let method = parse_or_err(var, val)?;
                 Ok(Parameter::Mode(method))
@@ -352,7 +358,7 @@ impl FromStr for Channel {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split("-");
+        let mut parts = s.split('-');
         let channel_1 = parts
             .next()
             .and_then(|channel| channel.parse::<u8>().ok())
@@ -398,7 +404,7 @@ impl FromStr for Port {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut parts = s.split("-");
+        let mut parts = s.split('-');
         let port_1 = parts
             .next()
             .and_then(|port| port.parse::<u16>().ok())

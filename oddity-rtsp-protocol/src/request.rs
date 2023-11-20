@@ -46,7 +46,7 @@ impl Request {
     pub fn accept(&self) -> Vec<&str> {
         self.headers
             .get("Accept")
-            .map(|val| val.split(",").map(|part| part.trim()).collect::<Vec<_>>())
+            .map(|val| val.split(',').map(|part| part.trim()).collect::<Vec<_>>())
             .unwrap_or_default()
     }
 
@@ -57,7 +57,7 @@ impl Request {
     pub fn transport(&self) -> Result<Vec<Transport>, Error> {
         if let Some(value) = self.headers.get("Transport") {
             value
-                .split(",")
+                .split(',')
                 .map(|part| part.parse())
                 .collect::<Result<Vec<_>, _>>()
         } else {
@@ -66,11 +66,7 @@ impl Request {
     }
 
     pub fn range(&self) -> Option<Result<Range, Error>> {
-        if let Some(value) = self.headers.get("Range") {
-            Some(value.parse())
-        } else {
-            None
-        }
+        self.headers.get("Range").map(|value| value.parse())
     }
 }
 

@@ -77,7 +77,7 @@ impl FromStr for RtpInfo {
             }
         }
 
-        let mut parts = s.split(";");
+        let mut parts = s.split(';');
         if let Some(url) = parts.next() {
             if let Some(url) = url.strip_prefix("url=") {
                 let mut rtp_info = RtpInfo::new(url);

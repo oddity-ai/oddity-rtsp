@@ -43,11 +43,11 @@ impl FromStr for Range {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.split_once(";") {
+        match s.split_once(';') {
             None => {
-                if let Some((unit, value)) = s.split_once("=") {
+                if let Some((unit, value)) = s.split_once('=') {
                     if Self::SUPPORTED_UNITS.contains(&unit) {
-                        if let Some((start, end)) = value.split_once("-") {
+                        if let Some((start, end)) = value.split_once('-') {
                             let start = if !start.is_empty() {
                                 Some(start.parse()?)
                             } else {
@@ -111,8 +111,8 @@ impl FromStr for NptTime {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "now" => Ok(NptTime::Now),
-            s => match s.split(":").collect::<Vec<_>>().as_slice() {
-                &[npt_time] => {
+            s => match *s.split(':').collect::<Vec<_>>().as_slice() {
+                [npt_time] => {
                     let npt_time =
                         npt_time
                             .parse::<f64>()
@@ -121,7 +121,7 @@ impl FromStr for NptTime {
                             })?;
                     Ok(NptTime::Time(npt_time))
                 }
-                &[npt_hh, npt_mm, npt_ss] => {
+                [npt_hh, npt_mm, npt_ss] => {
                     let npt_hh = npt_hh.parse::<u32>();
                     let npt_mm = npt_mm.parse::<u32>();
                     let npt_secs = npt_ss.parse::<f32>();

@@ -14,7 +14,7 @@ where
     T: Buf,
 {
     fn read_line(&mut self) -> Option<Result<String, FromUtf8Error>> {
-        if self.remaining() <= 0 {
+        if self.remaining() == 0 {
             return None;
         }
 

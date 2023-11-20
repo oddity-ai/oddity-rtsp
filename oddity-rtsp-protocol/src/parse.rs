@@ -118,12 +118,12 @@ impl<M: Message> Parser<M> {
         let line = line.trim();
         match head {
             Head::FirstLine => {
-                *metadata = Some(Self::parse_metadata(&line)?);
+                *metadata = Some(Self::parse_metadata(line)?);
                 Ok(Head::Header)
             }
             Head::Header => {
                 Ok(if !line.is_empty() {
-                    let (var, val) = parse_header(&line)?;
+                    let (var, val) = parse_header(line)?;
                     headers.insert(var, val);
                     Head::Header
                 } else {
@@ -183,6 +183,12 @@ impl Parser<Response> {
     #[inline]
     pub fn into_response(self) -> Result<Response> {
         self.into_message()
+    }
+}
+
+impl<M: Message> Default for Parser<M> {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -283,22 +289,22 @@ impl Parse for ResponseMetadata {
 }
 
 fn parse_version(part: &str, line: &str) -> Result<Version> {
-    if part.starts_with("RTSP/") {
-        Ok(match &part[5..] {
+    if let Some(stripped) = part.strip_prefix("RTSP/") {
+        Ok(match stripped {
             "1.0" => Version::V1,
             "2.0" => Version::V2,
             _ => Version::Unknown,
         })
     } else {
-        return Err(Error::VersionMalformed {
+        Err(Error::VersionMalformed {
             line: line.to_string(),
             version: part.to_string(),
-        });
+        })
     }
 }
 
 fn parse_header(line: &str) -> Result<(String, String)> {
-    let (var, val) = line.split_once(":").ok_or_else(|| Error::HeaderMalformed {
+    let (var, val) = line.split_once(':').ok_or_else(|| Error::HeaderMalformed {
         line: line.to_string(),
     })?;
 

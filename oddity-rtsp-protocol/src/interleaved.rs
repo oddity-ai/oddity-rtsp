@@ -76,24 +76,22 @@ impl InterleavedParser {
             } else {
                 None
             }
-        } else {
-            if buffer.remaining() >= 4 {
-                let header = &buffer.chunk()[..4];
-                if header[0] != MAGIC {
-                    return Some(Err(Error::InterleavedInvalid));
-                }
-
-                let channel = header[1];
-                let size = u16::from_be_bytes([header[2], header[3]]);
-
-                self.channel_and_size = Some((channel, size));
-
-                buffer.advance(4);
-
-                self.parse(buffer)
-            } else {
-                None
+        } else if buffer.remaining() >= 4 {
+            let header = &buffer.chunk()[..4];
+            if header[0] != MAGIC {
+                return Some(Err(Error::InterleavedInvalid));
             }
+
+            let channel = header[1];
+            let size = u16::from_be_bytes([header[2], header[3]]);
+
+            self.channel_and_size = Some((channel, size));
+
+            buffer.advance(4);
+
+            self.parse(buffer)
+        } else {
+            None
         }
     }
 }

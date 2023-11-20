@@ -32,13 +32,19 @@ impl<T: Target> Codec<T> {
     }
 }
 
+impl<T: Target> Default for Codec<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Target> Decoder for Codec<T> {
     type Item = MaybeInterleaved<T::Inbound>;
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if let State::Init = self.state {
-            if src.len() > 0 {
+            if !src.is_empty() {
                 if src[0] == interleaved::MAGIC {
                     self.state = State::ParseInterleaved;
                 } else {
