@@ -700,16 +700,16 @@ Content-Length: 16\r\n\
 
     fn request_play_ln() -> Bytes {
         EXAMPLE_REQUEST_PLAY_CRLN
-            .to_vec()
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|b| *b != b'\x0d')
             .collect::<Bytes>()
     }
 
     fn request_play_cr() -> Bytes {
         EXAMPLE_REQUEST_PLAY_CRLN
-            .to_vec()
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|b| *b != b'\x0a')
             .collect::<Bytes>()
     }

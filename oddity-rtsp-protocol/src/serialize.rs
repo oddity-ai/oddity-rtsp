@@ -321,13 +321,10 @@ CSeq: 2\r\n\
         );
 
         let mut request_serialized = BytesMut::new();
-        assert!(
-            if let Err(Error::VersionUnknown) = request.serialize(&mut request_serialized) {
-                true
-            } else {
-                false
-            }
-        )
+        assert!(matches!(
+            request.serialize(&mut request_serialized),
+            Err(Error::VersionUnknown)
+        ))
     }
 
     #[test]
