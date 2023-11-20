@@ -654,7 +654,7 @@ mod tests {
         .with_parameter(Parameter::Ssrc("01234ABCDEF".to_string()))
         .with_parameter(Parameter::Mode(Method::Describe))
         .to_string(),
-      "RTP/AVP/TCP;unicast;multicast;destination=1.2.3.4;interleaved=1234-1235;append;ttl=999;layers=2;port=8;client_port=9-10;server_port=11-12;ssrc=01234ABCDEF;mode=\"DESCRIBE\"",
+      "RTP/AVP/TCP;unicast;multicast;destination=1.2.3.4;interleaved=12-13;append;ttl=999;layers=2;port=8;client_port=9-10;server_port=11-12;ssrc=01234ABCDEF;mode=\"DESCRIBE\"",
     );
     }
 }
