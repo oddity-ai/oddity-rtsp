@@ -4,7 +4,6 @@ members = [
     "oddity-rtsp-protocol",
     "oddity-rtsp-server",
     "oddity-sdp-protocol",
-    "video-rs",
 ]
 
 # Specifying a workspace dependency is similar to package dependencies except:
