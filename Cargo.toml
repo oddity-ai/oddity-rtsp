@@ -14,4 +14,4 @@ members = [
 oddity-rtsp-protocol = { path = "oddity-rtsp-protocol" }
 oddity-rtsp-server = { path = "oddity-rtsp-server" }
 oddity-sdp-protocol = { path = "oddity-sdp-protocol" }
-video-rs = { path = "video-rs" }
+video-rs = { version = "0.5.0" }
