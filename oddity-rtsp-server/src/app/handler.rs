@@ -128,7 +128,10 @@ impl AppHandler {
                 .await
                 {
                     Ok(session_setup) => session_setup,
-                    Err(SessionSetupError::TransportNotSupported | SessionSetupError::DestinationInvalid) => {
+                    Err(
+                        SessionSetupError::TransportNotSupported
+                        | SessionSetupError::DestinationInvalid,
+                    ) => {
                         return reply_unsupported_transport(request);
                     }
                     Err(SessionSetupError::Media(err)) => {
@@ -142,12 +145,12 @@ impl AppHandler {
                 tracing::trace!(path = request.path(), "setup session");
 
                 let transport = session_setup.rtsp_transport.clone();
-                let maybe_session_id =  self
-                .use_context()
-                .await
-                .session_manager
-                .setup(source_delegate, session_setup)
-                .await;
+                let maybe_session_id = self
+                    .use_context()
+                    .await
+                    .session_manager
+                    .setup(source_delegate, session_setup)
+                    .await;
                 match maybe_session_id {
                     // Session was successfully registered!
                     Ok(session_id) => {
@@ -169,7 +172,10 @@ impl AppHandler {
 
                 let range = match request.range() {
                     Some(Ok(range)) => Some(range),
-                    Some(Err(Error::RangeUnitNotSupported { value } | Error::RangeTimeNotSupported { value })) => {
+                    Some(Err(
+                        Error::RangeUnitNotSupported { value }
+                        | Error::RangeTimeNotSupported { value },
+                    )) => {
                         tracing::error!(
               %request, %value,
               "client provided range header format that is not supported");
@@ -186,11 +192,11 @@ impl AppHandler {
 
                 if let Some(session_id) = request.session() {
                     let maybe_stream_state = self
-                    .use_context()
-                    .await
-                    .session_manager
-                    .play(&session_id.into(), range.clone())
-                    .await;
+                        .use_context()
+                        .await
+                        .session_manager
+                        .play(&session_id.into(), range.clone())
+                        .await;
                     match maybe_stream_state {
                         Some(Ok(stream_state)) => {
                             // Either just echo back the range the client requested, since

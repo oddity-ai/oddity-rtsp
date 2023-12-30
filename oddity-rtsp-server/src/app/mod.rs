@@ -86,7 +86,11 @@ async fn initialize_context(runtime: Arc<Runtime>) -> AppContext {
     }
 }
 
-#[allow(clippy::missing_errors_doc, clippy::future_not_send, clippy::needless_pass_by_ref_mut)]
+#[allow(
+    clippy::missing_errors_doc,
+    clippy::future_not_send,
+    clippy::needless_pass_by_ref_mut
+)]
 async fn register_sources_with_context(
     config: &AppConfig,
     context: &mut AppContext,

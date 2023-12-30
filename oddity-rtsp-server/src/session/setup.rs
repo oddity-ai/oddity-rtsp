@@ -77,7 +77,6 @@ pub struct SendInterleaved {
 }
 
 impl SessionSetupTarget {
-
     #[allow(clippy::similar_names)]
     pub fn from_rtsp_transport(
         rtsp_transport: &rtsp::Transport,

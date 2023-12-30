@@ -252,7 +252,10 @@ pub struct SourceDelegate {
 
 impl SourceDelegate {
     pub async fn query_media_info(&mut self) -> Option<media::MediaInfo> {
-        if matches!(self.control_tx.send(SourceControlMessage::StreamInfo), Ok(())) {
+        if matches!(
+            self.control_tx.send(SourceControlMessage::StreamInfo),
+            Ok(())
+        ) {
             self.media_info_rx.recv().await.ok()
         } else {
             None

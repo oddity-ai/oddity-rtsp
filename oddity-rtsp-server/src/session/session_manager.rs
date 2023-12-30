@@ -43,7 +43,12 @@ impl SessionManager {
             .await;
         tracing::trace!("started session manager");
 
-        Self { sessions, session_state_tx, worker, runtime }
+        Self {
+            sessions,
+            session_state_tx,
+            worker,
+            runtime,
+        }
     }
 
     #[allow(clippy::significant_drop_in_scrutinee)]

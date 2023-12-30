@@ -40,26 +40,31 @@ impl TaskManager {
         // another task already asked the manager to stop, in
         // which case we ignore the request and don't start a
         // task at all.
-        self.hold_tx.lock().await.as_ref().cloned().map_or_else(Task::none, |hold_all_tx| {
-            let (hold_tx, hold_rx) = oneshot::channel();
-            let (stop_tx, stop_rx) = mpsc::channel(1);
-            let stop_all_rx = self.stop_tx.subscribe();
-            let _ = task::spawn(async move {
-                // Instantiate task context here. After the fut-
-                // ure genrated by `f` has finished, it will be
-                // dropped automatically, which will cause the
-                // hold to be released as well.
-                let task_context = TaskContext {
-                    _token: hold_tx,
-                    _token_all: hold_all_tx,
-                    stop: stop_rx,
-                    stop_all: stop_all_rx,
-                };
+        self.hold_tx
+            .lock()
+            .await
+            .as_ref()
+            .cloned()
+            .map_or_else(Task::none, |hold_all_tx| {
+                let (hold_tx, hold_rx) = oneshot::channel();
+                let (stop_tx, stop_rx) = mpsc::channel(1);
+                let stop_all_rx = self.stop_tx.subscribe();
+                let _ = task::spawn(async move {
+                    // Instantiate task context here. After the fut-
+                    // ure genrated by `f` has finished, it will be
+                    // dropped automatically, which will cause the
+                    // hold to be released as well.
+                    let task_context = TaskContext {
+                        _token: hold_tx,
+                        _token_all: hold_all_tx,
+                        stop: stop_rx,
+                        stop_all: stop_all_rx,
+                    };
 
-                f(task_context).await;
-            });
-            Task::new(hold_rx, stop_tx)
-        })
+                    f(task_context).await;
+                });
+                Task::new(hold_rx, stop_tx)
+            })
     }
 
     pub async fn stop(&self) {

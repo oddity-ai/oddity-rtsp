@@ -55,13 +55,17 @@ impl ConnectionManager {
         tracing::trace!("sending stop signal to connection manager");
         self.worker.stop().await;
         tracing::trace!("connection manager stopped");
-        let futures = self.connections.lock().await.drain().map(|(_, mut connection)| {
-          async move {
-            connection.close().await;
-          }
-        }).collect::<Vec<_>>();
+        let futures = self
+            .connections
+            .lock()
+            .await
+            .drain()
+            .map(|(_, mut connection)| async move {
+                connection.close().await;
+            })
+            .collect::<Vec<_>>();
         for fut in futures {
-          fut.await;
+            fut.await;
         }
         // for (_, mut connection) in self.connections.lock().await.drain() {
         //     connection.close().await;

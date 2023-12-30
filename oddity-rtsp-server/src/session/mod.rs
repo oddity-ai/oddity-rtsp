@@ -316,7 +316,7 @@ impl SessionId {
     const SESSION_ID_LEN: u32 = 8;
 
     pub fn generate() -> Self {
-      Self(
+        Self(
             rand::thread_rng()
                 .sample(rand::distributions::Uniform::from(
                     10_u32.pow(Self::SESSION_ID_LEN - 1)..10_u32.pow(Self::SESSION_ID_LEN),
@@ -334,7 +334,7 @@ impl fmt::Display for SessionId {
 
 impl From<&str> for SessionId {
     fn from(session_id: &str) -> Self {
-      Self(session_id.to_string())
+        Self(session_id.to_string())
     }
 }
 
@@ -347,8 +347,8 @@ pub enum PlaySessionError {
 impl fmt::Display for PlaySessionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-          Self::RangeNotSupported => write!(f, "range not supported"),
-          Self::ControlBroken => write!(f, "failed to control session"),
+            Self::RangeNotSupported => write!(f, "range not supported"),
+            Self::ControlBroken => write!(f, "failed to control session"),
         }
     }
 }

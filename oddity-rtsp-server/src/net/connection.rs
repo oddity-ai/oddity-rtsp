@@ -81,7 +81,8 @@ impl Connection {
         let mut disconnected = false;
 
         let addr = inner
-            .peer_addr().map_or_else(|_| "?".to_string(), |peer_addr| peer_addr.to_string());
+            .peer_addr()
+            .map_or_else(|_| "?".to_string(), |peer_addr| peer_addr.to_string());
         let (read, write) = inner.into_split();
         let mut inbound = codec::FramedRead::new(read, Codec::<AsServer>::new());
         let mut outbound = codec::FramedWrite::new(write, Codec::<AsServer>::new());
