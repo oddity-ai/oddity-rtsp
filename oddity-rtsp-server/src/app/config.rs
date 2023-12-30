@@ -57,8 +57,8 @@ pub enum MediaKind {
 impl fmt::Display for MediaKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MediaKind::File => write!(f, "file"),
-            MediaKind::Stream => write!(f, "live stream"),
+            Self::File => write!(f, "file"),
+            Self::Stream => write!(f, "live stream"),
         }
     }
 }

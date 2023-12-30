@@ -3,5 +3,15 @@ resolver = "2"
 members = [
     "oddity-rtsp-protocol",
     "oddity-rtsp-server",
-    "oddity-sdp-protocol"
+    "oddity-sdp-protocol",
+    "video-rs",
 ]
+
+# Specifying a workspace dependency is similar to package dependencies except:
+# - Dependencies from this table cannot be declared as optional
+# - features declared in this table are additive with the features from [dependencies]
+[workspace.dependencies]
+oddity-rtsp-protocol = { path = "oddity-rtsp-protocol" }
+oddity-rtsp-server = { path = "oddity-rtsp-server" }
+oddity-sdp-protocol = { path = "oddity-sdp-protocol" }
+video-rs = { path = "video-rs" }

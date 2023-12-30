@@ -213,19 +213,16 @@ impl Source {
                   },
                   // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
                   message = control_rx.recv() => {
-                    match message {
-                      Some(SourceControlMessage::StreamInfo) => {
+                    if matches!(message, Some(SourceControlMessage::StreamInfo)) {
                         let _ = media_info_tx.send(stream_reader.info.clone());
-                      },
-                      None => {
+                    } else {
                         tracing::error!(%path, "source control channel broke unexpectedly");
                         stream_reader.stop().await;
                         break 'outer;
-                      },
                     };
                   },
                   // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-                  _ = task_context.wait_for_stop() => {
+                  () = task_context.wait_for_stop() => {
                     tracing::trace!(%path, "stopping source");
                     stream_reader.stop().await;
                     break 'outer;
@@ -255,7 +252,7 @@ pub struct SourceDelegate {
 
 impl SourceDelegate {
     pub async fn query_media_info(&mut self) -> Option<media::MediaInfo> {
-        if let Ok(()) = self.control_tx.send(SourceControlMessage::StreamInfo) {
+        if matches!(self.control_tx.send(SourceControlMessage::StreamInfo), Ok(())) {
             self.media_info_rx.recv().await.ok()
         } else {
             None

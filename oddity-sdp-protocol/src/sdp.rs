@@ -37,6 +37,7 @@ pub struct Sdp {
 }
 
 impl Sdp {
+    #[must_use]
     pub fn new(origin: IpAddr, name: String, destination: IpAddr, time_range: TimeRange) -> Self {
         Self {
             version: Version::V0,
@@ -57,38 +58,44 @@ impl Sdp {
         }
     }
 
+    #[must_use]
     pub fn with_username(mut self, username: &str) -> Self {
         self.origin_username = username.to_string();
         self
     }
 
+    #[must_use]
     pub fn with_session_version(mut self, version: usize) -> Self {
         self.origin_session_version = version.to_string();
         self
     }
 
+    #[must_use]
     pub fn with_description(mut self, description: &str) -> Self {
         self.session_description = Some(description.to_string());
         self
     }
 
+    #[must_use]
     pub fn with_tag(mut self, tag: Tag) -> Self {
         self.tags.push(tag);
         self
     }
 
+    #[must_use]
     pub fn with_tags(mut self, tags: impl IntoIterator<Item = Tag>) -> Self {
         self.tags.extend(tags);
         self
     }
 
+    #[must_use]
     pub fn with_media(
         mut self,
         kind: Kind,
         port: u16,
         protocol: Protocol,
-        codec_info: CodecInfo,
-        direction: Direction,
+        codec_info: &CodecInfo,
+        direction: &Direction,
     ) -> Self {
         let mut tags = codec_info.media_attributes();
         tags.push(Tag::Property(direction.to_string()));
@@ -120,7 +127,7 @@ impl fmt::Display for Sdp {
 
         writeln!(f, "s={}", self.session_name)?;
         if let Some(session_description) = self.session_description.as_ref() {
-            writeln!(f, "i={}", session_description)?;
+            writeln!(f, "i={session_description}")?;
         }
 
         writeln!(
@@ -132,11 +139,11 @@ impl fmt::Display for Sdp {
         writeln!(f, "t={} {}", self.timing.0, self.timing.1)?;
 
         for tag in &self.tags {
-            writeln!(f, "a={}", tag)?;
+            writeln!(f, "a={tag}")?;
         }
 
         for media in &self.media {
-            write!(f, "{}", media)?;
+            write!(f, "{media}")?;
         }
 
         Ok(())
@@ -163,7 +170,7 @@ impl fmt::Display for Media {
         )?;
 
         for tag in &self.tags {
-            writeln!(f, "a={}", tag)?;
+            writeln!(f, "a={tag}")?;
         }
 
         Ok(())
@@ -190,7 +197,7 @@ pub enum Version {
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Version::V0 => write!(f, "0"),
+            Self::V0 => write!(f, "0"),
         }
     }
 }
@@ -203,7 +210,7 @@ pub enum NetworkType {
 impl fmt::Display for NetworkType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            NetworkType::Internet => write!(f, "IN"),
+            Self::Internet => write!(f, "IN"),
         }
     }
 }
@@ -217,8 +224,8 @@ pub enum AddressType {
 impl fmt::Display for AddressType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            AddressType::IpV4 => write!(f, "IP4"),
-            AddressType::IpV6 => write!(f, "IP6"),
+            Self::IpV4 => write!(f, "IP4"),
+            Self::IpV6 => write!(f, "IP6"),
         }
     }
 }
@@ -232,8 +239,8 @@ pub enum Tag {
 impl fmt::Display for Tag {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Tag::Property(value) => write!(f, "{value}"),
-            Tag::Value(variable, value) => write!(f, "{variable}:{value}"),
+            Self::Property(value) => write!(f, "{value}"),
+            Self::Value(variable, value) => write!(f, "{variable}:{value}"),
         }
     }
 }
@@ -248,9 +255,9 @@ pub enum Direction {
 impl fmt::Display for Direction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Direction::ReceiveOnly => write!(f, "recvonly"),
-            Direction::SendOnly => write!(f, "sendonly"),
-            Direction::SendAndReceive => write!(f, "sendrecv"),
+            Self::ReceiveOnly => write!(f, "recvonly"),
+            Self::SendOnly => write!(f, "sendonly"),
+            Self::SendAndReceive => write!(f, "sendrecv"),
         }
     }
 }
@@ -267,11 +274,11 @@ pub enum Kind {
 impl fmt::Display for Kind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Kind::Video => write!(f, "video"),
-            Kind::Audio => write!(f, "audio"),
-            Kind::Text => write!(f, "text"),
-            Kind::Application => write!(f, "application"),
-            Kind::Message => write!(f, "message"),
+            Self::Video => write!(f, "video"),
+            Self::Audio => write!(f, "audio"),
+            Self::Text => write!(f, "text"),
+            Self::Application => write!(f, "application"),
+            Self::Message => write!(f, "message"),
         }
     }
 }
@@ -285,8 +292,8 @@ pub enum Protocol {
 impl fmt::Display for Protocol {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Protocol::RtpAvp => write!(f, "RTP/AVP"),
-            Protocol::RtpSAvp => write!(f, "RTP/SAVP"),
+            Self::RtpAvp => write!(f, "RTP/AVP"),
+            Self::RtpSAvp => write!(f, "RTP/SAVP"),
         }
     }
 }

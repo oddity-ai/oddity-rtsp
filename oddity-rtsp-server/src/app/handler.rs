@@ -25,6 +25,7 @@ impl AppHandler {
         Self { context }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn handle(&self, request: &Request, responder: &ResponseSenderTx) -> Response {
         tracing::trace!(%request, "handling request");
 
@@ -48,13 +49,13 @@ impl AppHandler {
                 tracing::trace!("handling DESCRIBE request");
                 if is_request_one_of_content_types_supported(request) {
                     tracing::trace!(path = request.path(), "querying SDP file for source");
-                    match self
+                    let maybe_sdp = self
                         .use_context()
                         .await
                         .source_manager
                         .describe(request.path())
-                        .await
-                    {
+                        .await;
+                    match maybe_sdp {
                         Some(Ok(sdp_contents)) => {
                             tracing::trace!(path=request.path(), %sdp_contents, "have SDP");
                             reply_to_describe_with_media_sdp(request, sdp_contents.to_string())
@@ -93,39 +94,30 @@ impl AppHandler {
                     return reply_aggregate_operation_not_allowed(request);
                 }
 
-                let transport = match request.transport() {
-                    Ok(transport) => transport,
-                    Err(_) => {
-                        // If the client did not provide a valid transport header value, then there
-                        // no way to reach it and we return "Unsupported Transport".
-                        return reply_unsupported_transport(request);
-                    }
+                let Ok(transport) = request.transport() else {
+                    // If the client did not provide a valid transport header value, then there
+                    // no way to reach it and we return "Unsupported Transport".
+                    return reply_unsupported_transport(request);
                 };
                 tracing::trace!(path = request.path(), ?transport, "resolved transport");
 
-                let mut source_delegate = match self
+                let Some(mut source_delegate) = self
                     .use_context()
                     .await
                     .source_manager
                     .subscribe(request.path())
                     .await
-                {
-                    Some(source_delegate) => source_delegate,
-                    None => {
-                        return reply_not_found(request);
-                    }
+                else {
+                    return reply_not_found(request);
                 };
                 tracing::trace!(path = request.path(), "acquired source delegate");
 
-                let media_info = match source_delegate.query_media_info().await {
-                    Some(media_info) => media_info,
-                    None => {
-                        tracing::trace!(
-                            path = request.path(),
-                            "failed to query media info from source",
-                        );
-                        return reply_internal_server_error(request);
-                    }
+                let Some(media_info) = source_delegate.query_media_info().await else {
+                    tracing::trace!(
+                        path = request.path(),
+                        "failed to query media info from source",
+                    );
+                    return reply_internal_server_error(request);
                 };
 
                 let session_setup = match SessionSetup::from_rtsp_candidate_transports(
@@ -136,8 +128,7 @@ impl AppHandler {
                 .await
                 {
                     Ok(session_setup) => session_setup,
-                    Err(SessionSetupError::TransportNotSupported)
-                    | Err(SessionSetupError::DestinationInvalid) => {
+                    Err(SessionSetupError::TransportNotSupported | SessionSetupError::DestinationInvalid) => {
                         return reply_unsupported_transport(request);
                     }
                     Err(SessionSetupError::Media(err)) => {
@@ -151,13 +142,13 @@ impl AppHandler {
                 tracing::trace!(path = request.path(), "setup session");
 
                 let transport = session_setup.rtsp_transport.clone();
-                match self
-                    .use_context()
-                    .await
-                    .session_manager
-                    .setup(source_delegate, session_setup)
-                    .await
-                {
+                let maybe_session_id =  self
+                .use_context()
+                .await
+                .session_manager
+                .setup(source_delegate, session_setup)
+                .await;
+                match maybe_session_id {
                     // Session was successfully registered!
                     Ok(session_id) => {
                         tracing::trace!(path=request.path(), %session_id, "registered session");
@@ -178,8 +169,7 @@ impl AppHandler {
 
                 let range = match request.range() {
                     Some(Ok(range)) => Some(range),
-                    Some(Err(Error::RangeUnitNotSupported { value }))
-                    | Some(Err(Error::RangeTimeNotSupported { value })) => {
+                    Some(Err(Error::RangeUnitNotSupported { value } | Error::RangeTimeNotSupported { value })) => {
                         tracing::error!(
               %request, %value,
               "client provided range header format that is not supported");
@@ -195,13 +185,13 @@ impl AppHandler {
                 };
 
                 if let Some(session_id) = request.session() {
-                    match self
-                        .use_context()
-                        .await
-                        .session_manager
-                        .play(&session_id.into(), range.clone())
-                        .await
-                    {
+                    let maybe_stream_state = self
+                    .use_context()
+                    .await
+                    .session_manager
+                    .play(&session_id.into(), range.clone())
+                    .await;
+                    match maybe_stream_state {
                         Some(Ok(stream_state)) => {
                             // Either just echo back the range the client requested, since
                             // we accepted it it will be correct or just generate a generic
@@ -325,13 +315,14 @@ fn reply_to_teardown(request: &Request) -> Response {
         .build()
 }
 
+#[allow(clippy::needless_pass_by_value)]
 #[inline]
 fn reply_to_play(request: &Request, range: Range, rtp_info: RtpInfo) -> Response {
     Response::ok()
         .with_cseq_of(request)
         .with_rtp_info([rtp_info])
         .with_header("Server", SERVER)
-        .with_header("Range", range)
+        .with_header("Range", &range)
         .build()
 }
 

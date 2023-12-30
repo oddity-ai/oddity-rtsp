@@ -72,7 +72,7 @@ impl Server {
                 }
               },
               // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
+              () = task_context.wait_for_stop() => {
                 tracing::trace!("server stopping");
                 break;
               },

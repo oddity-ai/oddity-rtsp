@@ -23,6 +23,7 @@ enum State {
 }
 
 impl<T: Target> Codec<T> {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             state: State::Init,
@@ -43,15 +44,13 @@ impl<T: Target> Decoder for Codec<T> {
     type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
-        if let State::Init = self.state {
-            if !src.is_empty() {
-                if src[0] == interleaved::MAGIC {
-                    self.state = State::ParseInterleaved;
-                } else {
-                    self.state = State::ParseMessage;
-                }
-            } else {
+        if matches!(self.state, State::Init) {
+            if src.is_empty() {
                 return Ok(None);
+            } else if src[0] == interleaved::MAGIC {
+                self.state = State::ParseInterleaved;
+            } else {
+                self.state = State::ParseMessage;
             }
         };
 

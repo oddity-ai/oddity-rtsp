@@ -60,7 +60,7 @@ impl Connection {
             .await;
         tracing::trace!(%id, "started connection");
 
-        Connection { worker }
+        Self { worker }
     }
 
     pub async fn close(&mut self) {
@@ -81,9 +81,7 @@ impl Connection {
         let mut disconnected = false;
 
         let addr = inner
-            .peer_addr()
-            .map(|peer_addr| peer_addr.to_string())
-            .unwrap_or("?".to_string());
+            .peer_addr().map_or_else(|_| "?".to_string(), |peer_addr| peer_addr.to_string());
         let (read, write) = inner.into_split();
         let mut inbound = codec::FramedRead::new(read, Codec::<AsServer>::new());
         let mut outbound = codec::FramedWrite::new(write, Codec::<AsServer>::new());
@@ -155,7 +153,7 @@ impl Connection {
                 }
               },
               // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
+              () = task_context.wait_for_stop() => {
                 tracing::trace!(%id, %addr, "connection worker stopping");
                 break;
               },
@@ -178,7 +176,7 @@ impl Connection {
 pub struct ConnectionId(usize);
 
 impl ConnectionId {
-    pub fn new(id: usize) -> Self {
+    pub const fn new(id: usize) -> Self {
         Self(id)
     }
 }
@@ -192,8 +190,8 @@ impl fmt::Display for ConnectionId {
 pub struct ConnectionIdGenerator(usize);
 
 impl ConnectionIdGenerator {
-    pub fn new() -> Self {
-        ConnectionIdGenerator(0)
+    pub const fn new() -> Self {
+        Self(0)
     }
 
     pub fn generate(&mut self) -> ConnectionId {

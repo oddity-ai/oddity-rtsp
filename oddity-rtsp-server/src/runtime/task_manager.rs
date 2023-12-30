@@ -40,7 +40,7 @@ impl TaskManager {
         // another task already asked the manager to stop, in
         // which case we ignore the request and don't start a
         // task at all.
-        if let Some(hold_all_tx) = self.hold_tx.lock().await.as_ref().cloned() {
+        self.hold_tx.lock().await.as_ref().cloned().map_or_else(Task::none, |hold_all_tx| {
             let (hold_tx, hold_rx) = oneshot::channel();
             let (stop_tx, stop_rx) = mpsc::channel(1);
             let stop_all_rx = self.stop_tx.subscribe();
@@ -59,9 +59,7 @@ impl TaskManager {
                 f(task_context).await;
             });
             Task::new(hold_rx, stop_tx)
-        } else {
-            Task::none()
-        }
+        })
     }
 
     pub async fn stop(&self) {
@@ -92,15 +90,15 @@ pub struct Task {
 }
 
 impl Task {
-    pub fn new(hold_rx: oneshot::Receiver<()>, stop_tx: mpsc::Sender<()>) -> Task {
+    pub fn new(hold_rx: oneshot::Receiver<()>, stop_tx: mpsc::Sender<()>) -> Self {
         Self {
             hold: Some(hold_rx),
             stop: Some(stop_tx),
         }
     }
 
-    pub fn none() -> Task {
-        Task {
+    pub const fn none() -> Self {
+        Self {
             hold: None,
             stop: None,
         }

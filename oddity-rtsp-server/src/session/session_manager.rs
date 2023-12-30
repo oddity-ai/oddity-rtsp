@@ -43,14 +43,10 @@ impl SessionManager {
             .await;
         tracing::trace!("started session manager");
 
-        Self {
-            sessions,
-            session_state_tx,
-            runtime,
-            worker,
-        }
+        Self { sessions, session_state_tx, worker, runtime }
     }
 
+    #[allow(clippy::significant_drop_in_scrutinee)]
     pub async fn stop(&mut self) {
         tracing::trace!("sending stop signal to session manager");
         self.worker.stop().await;
@@ -128,19 +124,16 @@ impl SessionManager {
             select! {
               // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
               state = session_state_rx.recv() => {
-                match state {
-                  Some(SessionState::Stopped(session_id)) => {
+                if let Some(SessionState::Stopped(session_id)) = state {
                     let _ = sessions.write().await.remove(&session_id);
                     tracing::trace!(%session_id, "session manager: received stopped");
-                  },
-                  None => {
+                } else {
                     tracing::error!("session state channel broke unexpectedly");
                     break;
-                  },
                 }
               },
               // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
+              () = task_context.wait_for_stop() => {
                 tracing::trace!("stopping session manager");
                 break;
               },
@@ -157,7 +150,7 @@ pub enum RegisterSessionError {
 impl fmt::Display for RegisterSessionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RegisterSessionError::AlreadyRegistered => write!(f, "already registered"),
+            Self::AlreadyRegistered => write!(f, "already registered"),
         }
     }
 }

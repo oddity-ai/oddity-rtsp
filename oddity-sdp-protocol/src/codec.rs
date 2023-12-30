@@ -11,7 +11,9 @@ pub enum CodecInfo<'params> {
 }
 
 impl<'params> CodecInfo<'params> {
-    pub fn h264(
+    #[allow(clippy::similar_names)]
+    #[must_use]
+    pub const fn h264(
         sps: &'params [u8],
         pps: &'params [&'params [u8]],
         packetization_mode: usize,
@@ -44,10 +46,11 @@ impl MediaAttributes for CodecInfo<'_> {
 fn h264_rtpmap() -> Tag {
     Tag::Value(
         "rtpmap".to_string(),
-        format!("{} H264/90000", FMT_RTP_PAYLOAD_DYNAMIC),
+        format!("{FMT_RTP_PAYLOAD_DYNAMIC} H264/90000"),
     )
 }
 
+#[allow(clippy::similar_names)]
 fn h264_fmtp(packetization_mode: usize, sps: &[u8], pps: &[&[u8]]) -> Tag {
     let profile_level_id_bytes = &sps[1..4];
     let profile_level_id = profile_level_id_bytes
@@ -65,8 +68,7 @@ fn h264_fmtp(packetization_mode: usize, sps: &[u8], pps: &[&[u8]]) -> Tag {
     Tag::Value(
         "fmtp".to_string(),
         format!(
-            "{} packetization-mode={}; profile-level-id={}; sprop-parameter-sets={}",
-            FMT_RTP_PAYLOAD_DYNAMIC, packetization_mode, profile_level_id, sprop_parameter_sets,
+            "{FMT_RTP_PAYLOAD_DYNAMIC} packetization-mode={packetization_mode}; profile-level-id={profile_level_id}; sprop-parameter-sets={sprop_parameter_sets}",
         ),
     )
 }

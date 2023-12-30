@@ -15,19 +15,19 @@ pub fn resolve_transport(rtsp_transport: &rtsp::Transport) -> rtsp::Transport {
 pub fn is_supported(transport: &rtsp::Transport) -> bool {
     return transport
         .lower_protocol()
-        .map(is_lower_protocol_supported)
-        .unwrap_or(true)
+        .map_or(true, is_lower_protocol_supported)
         && transport.parameters_iter().all(is_parameter_supported);
 }
 
-fn is_lower_protocol_supported(lower: &rtsp::Lower) -> bool {
+const fn is_lower_protocol_supported(lower: &rtsp::Lower) -> bool {
     match lower {
         rtsp::Lower::Udp => false,
         rtsp::Lower::Tcp => true,
     }
 }
 
-fn is_parameter_supported(parameter: &rtsp::Parameter) -> bool {
+#[allow(clippy::match_same_arms)]
+const fn is_parameter_supported(parameter: &rtsp::Parameter) -> bool {
     /*
       Supported parameters are:
       - `unicast`

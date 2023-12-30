@@ -121,107 +121,107 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Error::Encoding => write!(f, "encoding incorrect"),
-            Error::RequestLineMalformed { line } => write!(f, "request line malformed: {}", &line),
-            Error::VersionMissing { line } => {
+            Self::Encoding => write!(f, "encoding incorrect"),
+            Self::RequestLineMalformed { line } => write!(f, "request line malformed: {}", &line),
+            Self::VersionMissing { line } => {
                 write!(f, "version missing in request line: {}", &line)
             }
-            Error::StatusCodeMissing { line } => {
+            Self::StatusCodeMissing { line } => {
                 write!(f, "status code missing in response line: {}", &line)
             }
-            Error::MethodUnknown { method } => write!(f, "method unknown: {}", &method),
-            Error::UriMissing { line } => write!(f, "uri missing in request line: {}", &line),
-            Error::UriMalformed { line, uri } => {
+            Self::MethodUnknown { method } => write!(f, "method unknown: {}", &method),
+            Self::UriMissing { line } => write!(f, "uri missing in request line: {}", &line),
+            Self::UriMalformed { line, uri } => {
                 write!(f, "uri malformed: {} (in line: {})", &uri, &line)
             }
-            Error::UriNotAbsolute { uri } => {
+            Self::UriNotAbsolute { uri } => {
                 write!(f, "uri must be absolute, but it is relative: {}", &uri)
             }
-            Error::ReasonPhraseMissing { line } => {
+            Self::ReasonPhraseMissing { line } => {
                 write!(f, "reason phrase missing in response line: {}", &line)
             }
-            Error::VersionMalformed { line, version } => {
+            Self::VersionMalformed { line, version } => {
                 write!(f, "version malformed: {} (in line: {})", &version, &line)
             }
-            Error::StatusCodeNotInteger { line, status_code } => write!(
+            Self::StatusCodeNotInteger { line, status_code } => write!(
                 f,
                 "response has invalid status code: {} (in response line: {})",
                 &status_code, &line
             ),
-            Error::HeaderMalformed { line } => write!(f, "header line malformed: {}", &line),
-            Error::ContentLengthMissing => write!(f, "request does not have Content-Length header"),
-            Error::ContentLengthNotInteger { value } => write!(
+            Self::HeaderMalformed { line } => write!(f, "header line malformed: {}", &line),
+            Self::ContentLengthMissing => write!(f, "request does not have Content-Length header"),
+            Self::ContentLengthNotInteger { value } => write!(
                 f,
                 "request has invalid value for Content-Length: {}",
                 &value
             ),
-            Error::HeadAlreadyDone => write!(f, "head already done (cycle in state machine)"),
-            Error::BodyAlreadyDone => write!(f, "body already done (cycle in state machine)"),
-            Error::MetadataNotParsed => write!(f, "metadata not parsed"),
-            Error::NotDone => write!(f, "parser not done yet"),
-            Error::VersionUnknown => write!(f, "response has unknown version"),
-            Error::TransportProtocolProfileMissing { value } => {
+            Self::HeadAlreadyDone => write!(f, "head already done (cycle in state machine)"),
+            Self::BodyAlreadyDone => write!(f, "body already done (cycle in state machine)"),
+            Self::MetadataNotParsed => write!(f, "metadata not parsed"),
+            Self::NotDone => write!(f, "parser not done yet"),
+            Self::VersionUnknown => write!(f, "response has unknown version"),
+            Self::TransportProtocolProfileMissing { value } => {
                 write!(f, "transport protocol and/or profile missing: {}", &value)
             }
-            Error::TransportLowerUnknown { value } => {
+            Self::TransportLowerUnknown { value } => {
                 write!(f, "transport lower protocol unknown: {}", &value)
             }
-            Error::TransportParameterUnknown { var } => {
+            Self::TransportParameterUnknown { var } => {
                 write!(f, "transport parameter unknown: {}", &var)
             }
-            Error::TransportParameterValueMissing { var } => write!(
+            Self::TransportParameterValueMissing { var } => write!(
                 f,
                 "transport parameter should have value but does not (var: {})",
                 &var
             ),
-            Error::TransportParameterValueInvalid { var, val } => write!(
+            Self::TransportParameterValueInvalid { var, val } => write!(
                 f,
                 "transport parameter value is invalid or malformed (var: {}, val: {})",
                 &var, &val
             ),
-            Error::TransportParameterInvalid { parameter } => {
+            Self::TransportParameterInvalid { parameter } => {
                 write!(f, "transport parameter invalid: {}", &parameter)
             }
-            Error::TransportChannelMalformed { value } => {
+            Self::TransportChannelMalformed { value } => {
                 write!(f, "transport channel malformed: {}", &value)
             }
-            Error::TransportPortMalformed { value } => {
+            Self::TransportPortMalformed { value } => {
                 write!(f, "transport port malformed: {}", &value)
             }
-            Error::InterleavedInvalid => write!(
+            Self::InterleavedInvalid => write!(
                 f,
                 "interleaved data does not have valid header magic character"
             ),
-            Error::InterleavedPayloadTooLarge => write!(f, "interleaved payload too large"),
-            Error::RangeMalformed { value } => write!(f, "range malformed: {}", value),
-            Error::RangeUnitNotSupported { value } => {
+            Self::InterleavedPayloadTooLarge => write!(f, "interleaved payload too large"),
+            Self::RangeMalformed { value } => write!(f, "range malformed: {value}"),
+            Self::RangeUnitNotSupported { value } => {
                 write!(f, "range unit not supported: {}", &value)
             }
-            Error::RangeTimeNotSupported { value } => {
+            Self::RangeTimeNotSupported { value } => {
                 write!(f, "range time not supported: {}", &value)
             }
-            Error::RangeNptTimeMalfored { value } => {
+            Self::RangeNptTimeMalfored { value } => {
                 write!(f, "range npt time malformed: {}", &value)
             }
-            Error::RtpInfoUrlMissing { value } => write!(f, "rtp info url missing: {}", &value),
-            Error::RtpInfoParameterUnknown { value } => {
+            Self::RtpInfoUrlMissing { value } => write!(f, "rtp info url missing: {}", &value),
+            Self::RtpInfoParameterUnknown { value } => {
                 write!(f, "rtp info parameter unknown: {}", &value)
             }
-            Error::RtpInfoParameterInvalid { value } => {
+            Self::RtpInfoParameterInvalid { value } => {
                 write!(f, "rtp info parameter invalid: {}", &value)
             }
-            Error::RtpInfoParameterUnexpected { value } => {
+            Self::RtpInfoParameterUnexpected { value } => {
                 write!(f, "rtp info contains unexpected parameter: {}", &value)
             }
-            Error::Shutdown => write!(f, "underlying socket was shut down"),
-            Error::Io(err) => write!(f, "{}", err),
+            Self::Shutdown => write!(f, "underlying socket was shut down"),
+            Self::Io(err) => write!(f, "{err}"),
         }
     }
 }
 
 impl convert::From<io::Error> for Error {
     fn from(error: io::Error) -> Self {
-        Error::Io(error)
+        Self::Io(error)
     }
 }
 

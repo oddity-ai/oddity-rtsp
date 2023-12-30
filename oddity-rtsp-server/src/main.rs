@@ -62,7 +62,7 @@ fn initialize_media() -> Result<(), Box<dyn Error>> {
 }
 
 fn initialize_and_read_config() -> Result<AppConfig, ConfigError> {
-    let config_file = env::args().nth(1).unwrap_or("default.yaml".to_string());
+    let config_file = env::args().nth(1).unwrap_or_else(|| "default.yaml".to_string());
     let config_file = Path::new(&config_file);
     tracing::trace!(config_file=%config_file.display(), "loading config");
 

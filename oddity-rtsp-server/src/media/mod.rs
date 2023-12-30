@@ -21,8 +21,8 @@ pub enum MediaDescriptor {
 impl fmt::Display for MediaDescriptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            MediaDescriptor::File(path) => write!(f, "file: {}", path.display()),
-            MediaDescriptor::Stream(url) => write!(f, "stream: {}", url),
+            Self::File(path) => write!(f, "file: {}", path.display()),
+            Self::Stream(url) => write!(f, "stream: {url}"),
         }
     }
 }
@@ -30,8 +30,8 @@ impl fmt::Display for MediaDescriptor {
 impl From<MediaDescriptor> for Locator {
     fn from(descriptor: MediaDescriptor) -> Self {
         match descriptor {
-            MediaDescriptor::File(path) => Locator::Path(path),
-            MediaDescriptor::Stream(url) => Locator::Url(url),
+            MediaDescriptor::File(path) => Self::Path(path),
+            MediaDescriptor::Stream(url) => Self::Url(url),
         }
     }
 }

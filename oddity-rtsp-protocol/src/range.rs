@@ -12,15 +12,17 @@ pub struct Range {
 impl Range {
     const SUPPORTED_UNITS: [&'static str; 1] = ["npt"];
 
-    pub fn new(start: NptTime, end: NptTime) -> Range {
-        Range {
+    #[must_use]
+    pub const fn new(start: NptTime, end: NptTime) -> Self {
+        Self {
             start: Some(start),
             end: Some(end),
         }
     }
 
-    pub fn new_for_live() -> Range {
-        Range {
+    #[must_use]
+    pub const fn new_for_live() -> Self {
+        Self {
             start: Some(NptTime::Now),
             end: None,
         }
@@ -31,9 +33,9 @@ impl fmt::Display for Range {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "npt=")?;
         match (self.start.as_ref(), self.end.as_ref()) {
-            (Some(start), Some(end)) => write!(f, "{}-{}", start, end),
-            (Some(start), None) => write!(f, "{}-", start),
-            (None, Some(end)) => write!(f, "-{}", end),
+            (Some(start), Some(end)) => write!(f, "{start}-{end}"),
+            (Some(start), None) => write!(f, "{start}-"),
+            (None, Some(end)) => write!(f, "-{end}"),
             (None, None) => write!(f, "-"),
         }
     }
@@ -48,17 +50,17 @@ impl FromStr for Range {
                 if let Some((unit, value)) = s.split_once('=') {
                     if Self::SUPPORTED_UNITS.contains(&unit) {
                         if let Some((start, end)) = value.split_once('-') {
-                            let start = if !start.is_empty() {
+                            let start = if start.is_empty() {
+                                None
+                            } else {
                                 Some(start.parse()?)
-                            } else {
-                                None
                             };
-                            let end = if !end.is_empty() {
+                            let end = if end.is_empty() {
+                                None
+                            } else {
                                 Some(end.parse()?)
-                            } else {
-                                None
                             };
-                            Ok(Range { start, end })
+                            Ok(Self { start, end })
                         } else {
                             Err(Error::RangeMalformed {
                                 value: s.to_string(),
@@ -99,8 +101,8 @@ pub enum NptTime {
 impl fmt::Display for NptTime {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            NptTime::Now => write!(f, "now"),
-            NptTime::Time(seconds) => write!(f, "{:.3}", seconds),
+            Self::Now => write!(f, "now"),
+            Self::Time(seconds) => write!(f, "{seconds:.3}"),
         }
     }
 }
@@ -110,7 +112,7 @@ impl FromStr for NptTime {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "now" => Ok(NptTime::Now),
+            "now" => Ok(Self::Now),
             s => match *s.split(':').collect::<Vec<_>>().as_slice() {
                 [npt_time] => {
                     let npt_time =
@@ -119,7 +121,7 @@ impl FromStr for NptTime {
                             .map_err(|_| Error::RangeNptTimeMalfored {
                                 value: s.to_string(),
                             })?;
-                    Ok(NptTime::Time(npt_time))
+                    Ok(Self::Time(npt_time))
                 }
                 [npt_hh, npt_mm, npt_ss] => {
                     let npt_hh = npt_hh.parse::<u32>();
@@ -128,8 +130,8 @@ impl FromStr for NptTime {
                     match (npt_hh, npt_mm, npt_secs) {
                         (Ok(hh), Ok(mm), Ok(secs)) => {
                             let npt_time =
-                                ((hh * 3600) as f64) + ((mm * 60) as f64) + (secs as f64);
-                            Ok(NptTime::Time(npt_time))
+                                f64::from(hh * 3600) + f64::from(mm * 60) + f64::from(secs);
+                            Ok(Self::Time(npt_time))
                         }
                         _ => Err(Error::RangeNptTimeMalfored {
                             value: s.to_string(),

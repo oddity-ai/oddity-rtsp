@@ -4,40 +4,46 @@ use std::str::FromStr;
 
 use super::{Error, Method};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transport {
     lower: Option<Lower>,
     parameters: Vec<Parameter>,
 }
 
 impl Transport {
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             lower: None,
             parameters: Vec::new(),
         }
     }
 
-    pub fn with_lower_protocol(mut self, lower: Lower) -> Self {
+    #[must_use]
+    pub const fn with_lower_protocol(mut self, lower: Lower) -> Self {
         self.lower = Some(lower);
         self
     }
 
+    #[must_use]
     pub fn with_parameter(mut self, parameter: Parameter) -> Self {
         self.parameters.push(parameter);
         self
     }
 
+    #[must_use]
     pub fn with_parameters(mut self, parameters: impl IntoIterator<Item = Parameter>) -> Self {
         self.parameters.extend(parameters);
         self
     }
 
-    pub fn lower_protocol(&self) -> Option<&Lower> {
+    #[must_use]
+    pub const fn lower_protocol(&self) -> Option<&Lower> {
         self.lower.as_ref()
     }
 
-    pub fn parameters(&self) -> &impl IntoIterator<Item = Parameter> {
+    #[must_use]
+    pub const fn parameters(&self) -> &impl IntoIterator<Item = Parameter> {
         &self.parameters
     }
 
@@ -45,64 +51,59 @@ impl Transport {
         self.parameters.iter()
     }
 
+    #[must_use]
     pub fn destination(&self) -> Option<&IpAddr> {
-        self.parameters_iter()
-            .filter_map(|parameter| {
-                if let Parameter::Destination(ip_addr) = parameter {
-                    Some(ip_addr)
-                } else {
-                    None
-                }
-            })
-            .next()
+        self.parameters_iter().find_map(|parameter| {
+            if let Parameter::Destination(ip_addr) = parameter {
+                Some(ip_addr)
+            } else {
+                None
+            }
+        })
     }
 
+    #[must_use]
     pub fn port(&self) -> Option<&Port> {
-        self.parameters_iter()
-            .filter_map(|parameter| {
-                if let Parameter::Port(port) = parameter {
-                    Some(port)
-                } else {
-                    None
-                }
-            })
-            .next()
+        self.parameters_iter().find_map(|parameter| {
+            if let Parameter::Port(port) = parameter {
+                Some(port)
+            } else {
+                None
+            }
+        })
     }
 
+    #[must_use]
     pub fn client_port(&self) -> Option<&Port> {
-        self.parameters_iter()
-            .filter_map(|parameter| {
-                if let Parameter::ClientPort(port) = parameter {
-                    Some(port)
-                } else {
-                    None
-                }
-            })
-            .next()
+        self.parameters_iter().find_map(|parameter| {
+            if let Parameter::ClientPort(port) = parameter {
+                Some(port)
+            } else {
+                None
+            }
+        })
     }
 
+    #[must_use]
     pub fn server_port(&self) -> Option<&Port> {
-        self.parameters_iter()
-            .filter_map(|parameter| {
-                if let Parameter::ServerPort(port) = parameter {
-                    Some(port)
-                } else {
-                    None
-                }
-            })
-            .next()
+        self.parameters_iter().find_map(|parameter| {
+            if let Parameter::ServerPort(port) = parameter {
+                Some(port)
+            } else {
+                None
+            }
+        })
     }
 
+    #[must_use]
     pub fn interleaved_channel(&self) -> Option<&Channel> {
-        self.parameters_iter()
-            .filter_map(|parameter| {
-                if let Parameter::Interleaved(channel) = parameter {
-                    Some(channel)
-                } else {
-                    None
-                }
-            })
-            .next()
+        self.parameters_iter().find_map(|parameter| {
+            if let Parameter::Interleaved(channel) = parameter {
+                Some(channel)
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -116,10 +117,10 @@ impl fmt::Display for Transport {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RTP/AVP")?;
         if let Some(lower) = self.lower.as_ref() {
-            write!(f, "/{}", lower)?;
+            write!(f, "/{lower}")?;
         }
-        for parameter in self.parameters.iter() {
-            write!(f, ";{}", parameter)?;
+        for parameter in &self.parameters {
+            write!(f, ";{parameter}")?;
         }
         Ok(())
     }
@@ -131,27 +132,22 @@ impl FromStr for Transport {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (spec, params) = s
             .split_once(';')
-            .map(|(spec, params)| (spec, Some(params)))
-            .unwrap_or_else(|| (s, None));
+            .map_or_else(|| (s, None), |(spec, params)| (spec, Some(params)));
 
         if spec.starts_with("RTP/AVP") {
-            let lower = spec
-                .split('/')
-                .nth(2)
-                .map(|lower| lower.parse())
-                .transpose()?;
+            let lower = spec.split('/').nth(2).map(str::parse).transpose()?;
 
             let parameters = params
                 .map(|params| {
                     params
                         .split(';')
-                        .map(|p| p.parse())
+                        .map(str::parse)
                         .collect::<Result<Vec<_>, _>>()
                 })
                 .transpose()?
                 .unwrap_or_default();
 
-            Ok(Transport { lower, parameters })
+            Ok(Self { lower, parameters })
         } else {
             Err(Error::TransportProtocolProfileMissing {
                 value: s.to_string(),
@@ -160,7 +156,7 @@ impl FromStr for Transport {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Lower {
     Tcp,
     Udp,
@@ -169,8 +165,8 @@ pub enum Lower {
 impl fmt::Display for Lower {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Lower::Tcp => write!(f, "TCP"),
-            Lower::Udp => write!(f, "UDP"),
+            Self::Tcp => write!(f, "TCP"),
+            Self::Udp => write!(f, "UDP"),
         }
     }
 }
@@ -180,8 +176,8 @@ impl FromStr for Lower {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "TCP" => Ok(Lower::Tcp),
-            "UDP" => Ok(Lower::Udp),
+            "TCP" => Ok(Self::Tcp),
+            "UDP" => Ok(Self::Udp),
             _ => Err(Error::TransportLowerUnknown {
                 value: s.to_string(),
             }),
@@ -189,7 +185,7 @@ impl FromStr for Lower {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Parameter {
     Unicast,
     Multicast,
@@ -208,44 +204,53 @@ pub enum Parameter {
 impl fmt::Display for Parameter {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Parameter::Unicast => {
+            Self::Unicast => {
                 write!(f, "unicast")
             }
-            Parameter::Multicast => {
+            Self::Multicast => {
                 write!(f, "multicast")
             }
-            Parameter::Destination(host) => {
-                write!(f, "destination={}", host)
+            Self::Destination(host) => {
+                write!(f, "destination={host}")
             }
-            Parameter::Interleaved(channel) => {
-                write!(f, "interleaved={}", channel)
+            Self::Interleaved(channel) => {
+                write!(f, "interleaved={channel}")
             }
-            Parameter::Append => {
+            Self::Append => {
                 write!(f, "append")
             }
-            Parameter::Ttl(ttl) => {
-                write!(f, "ttl={}", ttl)
+            Self::Ttl(ttl) => {
+                write!(f, "ttl={ttl}")
             }
-            Parameter::Layers(layers) => {
-                write!(f, "layers={}", layers)
+            Self::Layers(layers) => {
+                write!(f, "layers={layers}")
             }
-            Parameter::Port(port) => {
-                write!(f, "port={}", port)
+            Self::Port(port) => {
+                write!(f, "port={port}")
             }
-            Parameter::ClientPort(client_port) => {
-                write!(f, "client_port={}", client_port)
+            Self::ClientPort(client_port) => {
+                write!(f, "client_port={client_port}")
             }
-            Parameter::ServerPort(server_port) => {
-                write!(f, "server_port={}", server_port)
+            Self::ServerPort(server_port) => {
+                write!(f, "server_port={server_port}")
             }
-            Parameter::Ssrc(ssrc) => {
-                write!(f, "ssrc={}", ssrc)
+            Self::Ssrc(ssrc) => {
+                write!(f, "ssrc={ssrc}")
             }
-            Parameter::Mode(method) => {
-                write!(f, "mode=\"{}\"", method)
+            Self::Mode(method) => {
+                write!(f, "mode=\"{method}\"")
             }
         }
     }
+}
+
+fn parse_or_err<T: FromStr>(var: &str, value: &str) -> Result<T, Error> {
+    value
+        .parse::<T>()
+        .map_err(|_| Error::TransportParameterValueInvalid {
+            var: var.to_string(),
+            val: value.to_string(),
+        })
 }
 
 impl FromStr for Parameter {
@@ -267,66 +272,58 @@ impl FromStr for Parameter {
                 })
         };
 
-        fn parse_or_err<T: FromStr>(var: &str, val: &str) -> Result<T, Error> {
-            val.parse::<T>()
-                .map_err(|_| Error::TransportParameterValueInvalid {
-                    var: var.to_string(),
-                    val: val.to_string(),
-                })
-        }
-
         match var {
-            "unicast" => Ok(Parameter::Unicast),
-            "multicast" => Ok(Parameter::Multicast),
+            "unicast" => Ok(Self::Unicast),
+            "multicast" => Ok(Self::Multicast),
             "destination" => {
-                let val = val_or_err()?;
-                let host = parse_or_err(var, val)?;
-                Ok(Parameter::Destination(host))
+                let value = val_or_err()?;
+                let host = parse_or_err(var, value)?;
+                Ok(Self::Destination(host))
             }
             "interleaved" => {
-                let val = val_or_err()?;
-                let channel = parse_or_err(var, val)?;
-                Ok(Parameter::Interleaved(channel))
+                let value = val_or_err()?;
+                let channel = parse_or_err(var, value)?;
+                Ok(Self::Interleaved(channel))
             }
-            "append" => Ok(Parameter::Append),
+            "append" => Ok(Self::Append),
             "ttl" => {
-                let val = val_or_err()?;
-                let ttl = parse_or_err(var, val)?;
-                Ok(Parameter::Ttl(ttl))
+                let value = val_or_err()?;
+                let ttl = parse_or_err(var, value)?;
+                Ok(Self::Ttl(ttl))
             }
             "layers" => {
-                let val = val_or_err()?;
-                let layers = parse_or_err(var, val)?;
-                Ok(Parameter::Layers(layers))
+                let value = val_or_err()?;
+                let layers = parse_or_err(var, value)?;
+                Ok(Self::Layers(layers))
             }
             "port" => {
-                let val = val_or_err()?;
-                let port = parse_or_err(var, val)?;
-                Ok(Parameter::Port(port))
+                let value = val_or_err()?;
+                let port = parse_or_err(var, value)?;
+                Ok(Self::Port(port))
             }
             "client_port" => {
-                let val = val_or_err()?;
-                let port = parse_or_err(var, val)?;
-                Ok(Parameter::ClientPort(port))
+                let value = val_or_err()?;
+                let port = parse_or_err(var, value)?;
+                Ok(Self::ClientPort(port))
             }
             "server_port" => {
-                let val = val_or_err()?;
-                let port = parse_or_err(var, val)?;
-                Ok(Parameter::ServerPort(port))
+                let value = val_or_err()?;
+                let port = parse_or_err(var, value)?;
+                Ok(Self::ServerPort(port))
             }
             "ssrc" => {
-                let val = val_or_err()?;
-                Ok(Parameter::Ssrc(val.to_string()))
+                let value = val_or_err()?;
+                Ok(Self::Ssrc(value.to_string()))
             }
             "mode" => {
-                let val = val_or_err()?;
-                let val = val
+                let value = val_or_err()?;
+                let value = value
                     .strip_prefix('"')
-                    .unwrap_or(val)
+                    .unwrap_or(value)
                     .strip_suffix('"')
-                    .unwrap_or(val);
-                let method = parse_or_err(var, val)?;
-                Ok(Parameter::Mode(method))
+                    .unwrap_or(value);
+                let method = parse_or_err(var, value)?;
+                Ok(Self::Mode(method))
             }
             _ => Err(Error::TransportParameterUnknown {
                 var: var.to_string(),
@@ -335,7 +332,7 @@ impl FromStr for Parameter {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Channel {
     Single(u8),
     Range(u8, u8),
@@ -344,11 +341,11 @@ pub enum Channel {
 impl fmt::Display for Channel {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Channel::Single(channel) => {
-                write!(f, "{}", channel)
+            Self::Single(channel) => {
+                write!(f, "{channel}")
             }
-            Channel::Range(channel_1, channel_2) => {
-                write!(f, "{}-{}", channel_1, channel_2)
+            Self::Range(channel_1, channel_2) => {
+                write!(f, "{channel_1}-{channel_2}")
             }
         }
     }
@@ -374,14 +371,14 @@ impl FromStr for Channel {
         });
 
         Ok(if let Some(channel_2) = channel_2 {
-            Channel::Range(channel_1, channel_2?)
+            Self::Range(channel_1, channel_2?)
         } else {
-            Channel::Single(channel_1)
+            Self::Single(channel_1)
         })
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Port {
     Single(u16),
     Range(u16, u16),
@@ -390,11 +387,11 @@ pub enum Port {
 impl fmt::Display for Port {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Port::Single(port) => {
-                write!(f, "{}", port)
+            Self::Single(port) => {
+                write!(f, "{port}")
             }
-            Port::Range(port_1, port_2) => {
-                write!(f, "{}-{}", port_1, port_2)
+            Self::Range(port_1, port_2) => {
+                write!(f, "{port_1}-{port_2}")
             }
         }
     }
@@ -419,9 +416,9 @@ impl FromStr for Port {
         });
 
         Ok(if let Some(port_2) = port_2 {
-            Port::Range(port_1, port_2?)
+            Self::Range(port_1, port_2?)
         } else {
-            Port::Single(port_1)
+            Self::Single(port_1)
         })
     }
 }

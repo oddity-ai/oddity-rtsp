@@ -31,7 +31,7 @@ impl Message for Request {
 }
 
 impl Request {
-    pub fn uri(&self) -> &Uri {
+    pub const fn uri(&self) -> &Uri {
         &self.uri
     }
 
@@ -40,29 +40,31 @@ impl Request {
     }
 
     pub fn require(&self) -> Option<&str> {
-        self.headers.get("Require").map(|val| val.as_str())
+        self.headers.get("Require").map(String::as_str)
     }
 
     pub fn accept(&self) -> Vec<&str> {
         self.headers
             .get("Accept")
-            .map(|val| val.split(',').map(|part| part.trim()).collect::<Vec<_>>())
+            .map(|val| val.split(',').map(str::trim).collect::<Vec<_>>())
             .unwrap_or_default()
     }
 
     pub fn session(&self) -> Option<&str> {
-        self.headers.get("Session").map(|val| val.as_str())
+        self.headers.get("Session").map(String::as_str)
     }
 
+    #[allow(clippy::missing_errors_doc)]
     pub fn transport(&self) -> Result<Vec<Transport>, Error> {
-        if let Some(value) = self.headers.get("Transport") {
-            value
-                .split(',')
-                .map(|part| part.parse())
-                .collect::<Result<Vec<_>, _>>()
-        } else {
-            Ok(Vec::new())
-        }
+        self.headers.get("Transport").map_or_else(
+            || Ok(Vec::new()),
+            |value| {
+                value
+                    .split(',')
+                    .map(str::parse)
+                    .collect::<Result<Vec<_>, _>>()
+            },
+        )
     }
 
     pub fn range(&self) -> Option<Result<Range, Error>> {
@@ -101,7 +103,7 @@ pub struct RequestMetadata {
 }
 
 impl RequestMetadata {
-    pub(super) fn new(method: Method, uri: Uri, version: Version) -> Self {
+    pub(super) const fn new(method: Method, uri: Uri, version: Version) -> Self {
         Self {
             method,
             uri,

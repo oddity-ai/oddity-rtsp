@@ -123,7 +123,7 @@ impl Session {
 
     pub async fn teardown(&mut self) {
         tracing::trace!("sending teardown signal to session");
-        let _ = self.worker.stop().await;
+        self.worker.stop().await;
         tracing::trace!("session torn down");
     }
 
@@ -160,6 +160,7 @@ impl Session {
         let _ = state_tx.send(SessionState::Stopped(id));
     }
 
+    #[allow(clippy::too_many_lines, clippy::similar_names)]
     async fn run_tcp_interleaved(
         id: SessionId,
         source_delegate: SourceDelegate,
@@ -180,97 +181,91 @@ impl Session {
               reset = source_reset_rx.recv() => {
                 // If the source reader had an error and reinitialized its reader, then regained
                 // the connection, we must reinitialize our muxer as well to cope.
-                match reset {
-                  Ok(media_info) => {
-                    tracing::trace!("reinitializing muxer");
-                    let new_muxer = rtp_muxer::make_rtp_muxer()
-                      .await
-                      .and_then(|mut rtp_muxer| {
-                        for stream_info in media_info.streams {
-                          tracing::trace!(
-                            stream_index=stream_info.index,
-                            "reinitializing muxer: adding stream to muxer",
-                          );
-                          rtp_muxer = rtp_muxer.with_stream(stream_info)?;
-                        }
-                        Ok(rtp_muxer)
-                      });
+                if let Ok(media_info) = reset {
+                  tracing::trace!("reinitializing muxer");
+                  let new_muxer = rtp_muxer::make_rtp_muxer()
+                    .await
+                    .and_then(|mut rtp_muxer| {
+                      for stream_info in media_info.streams {
+                        tracing::trace!(
+                          stream_index=stream_info.index,
+                          "reinitializing muxer: adding stream to muxer",
+                        );
+                        rtp_muxer = rtp_muxer.with_stream(stream_info)?;
+                      }
+                      Ok(rtp_muxer)
+                    });
 
-                    match new_muxer {
-                      Ok(new_muxer) => {
-                        muxer = new_muxer;
-                      },
-                      Err(err) => {
-                        tracing::error!(%err, %id, "failed to reinitialize muxer");
-                      },
-                    };
-                  },
-                  Err(_) => {
-                    tracing::error!(%id, "source broken");
-                    break;
-                  },
+                  match new_muxer {
+                    Ok(new_muxer) => {
+                      muxer = new_muxer;
+                    },
+                    Err(err) => {
+                      tracing::error!(%err, %id, "failed to reinitialize muxer");
+                    },
+                  };
+                } else {
+                  tracing::error!(%id, "source broken");
+                  break;
                 }
               },
               // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
               packet = source_packet_rx.recv() => {
-                match packet {
-                  Ok(packet) => {
-                    let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
-                    muxer = muxed;
+                if let Ok(packet) = packet {
+                  let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
+                  muxer = muxed;
 
-                    if need_stream_state {
-                      tracing::trace!(%id, "fetching stream state");
-                      let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
-                      let stream_state = media::StreamState {
-                        rtp_seq,
-                        rtp_timestamp,
-                      };
-                      tracing::trace!(%id, rtp_seq, rtp_timestamp, "fetched stream state");
-                      let _ = stream_state_tx.send(stream_state);
-
-                      need_stream_state = false;
-                    }
-
-                    let packet = match packet {
-                      Ok(packet) => packet,
-                      Err(err) => {
-                        tracing::error!(%id, %err, "failed to mux packet");
-                        break;
-                      },
+                  if need_stream_state {
+                    tracing::trace!(%id, "fetching stream state");
+                    let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
+                    let stream_state = media::StreamState {
+                      rtp_seq,
+                      rtp_timestamp,
                     };
+                    tracing::trace!(%id, rtp_seq, rtp_timestamp, "fetched stream state");
+                    let _ = stream_state_tx.send(stream_state);
 
-                    if state == SessionMediaState::Playing {
-                      let messages = packet
-                        .into_iter()
-                        .map(|item| {
-                          match item {
-                            video::RtpBuf::Rtp(payload) => {
-                              rtsp::ResponseMaybeInterleaved::Interleaved {
-                                channel: target.rtp_channel,
-                                payload: payload.into(),
-                              }
-                            },
-                            video::RtpBuf::Rtcp(payload) => {
-                              rtsp::ResponseMaybeInterleaved::Interleaved {
-                                channel: target.rtcp_channel,
-                                payload: payload.into(),
-                              }
-                            },
-                          }
-                        });
+                    need_stream_state = false;
+                  }
 
-                      for message in messages {
-                        if let Err(err) = target.sender.send(message) {
-                          tracing::trace!(%id, %err, "underlying connection closed");
-                          break 'main;
+                  let packet = match packet {
+                    Ok(packet) => packet,
+                    Err(err) => {
+                      tracing::error!(%id, %err, "failed to mux packet");
+                      break;
+                    },
+                  };
+
+                  if state == SessionMediaState::Playing {
+                    let messages = packet
+                      .into_iter()
+                      .map(|item| {
+                        match item {
+                          video::RtpBuf::Rtp(payload) => {
+                            rtsp::ResponseMaybeInterleaved::Interleaved {
+                              channel: target.rtp_channel,
+                              payload: payload.into(),
+                            }
+                          },
+                          video::RtpBuf::Rtcp(payload) => {
+                            rtsp::ResponseMaybeInterleaved::Interleaved {
+                              channel: target.rtcp_channel,
+                              payload: payload.into(),
+                            }
+                          },
                         }
+                      });
+
+                    for message in messages {
+                      if let Err(err) = target.sender.send(message) {
+                        tracing::trace!(%id, %err, "underlying connection closed");
+                        break 'main;
                       }
                     }
                   }
-                  Err(_) => {
-                    tracing::error!(%id, "source broken");
-                    break;
-                  },
+                } else {
+                  tracing::error!(%id, "source broken");
+                  break;
                 }
               },
               // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
@@ -291,7 +286,7 @@ impl Session {
                 };
               },
               // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
+              () = task_context.wait_for_stop() => {
                 tracing::trace!("tearing down session");
                 break;
               },
@@ -320,8 +315,8 @@ pub struct SessionId(String);
 impl SessionId {
     const SESSION_ID_LEN: u32 = 8;
 
-    pub fn generate() -> SessionId {
-        SessionId(
+    pub fn generate() -> Self {
+      Self(
             rand::thread_rng()
                 .sample(rand::distributions::Uniform::from(
                     10_u32.pow(Self::SESSION_ID_LEN - 1)..10_u32.pow(Self::SESSION_ID_LEN),
@@ -339,7 +334,7 @@ impl fmt::Display for SessionId {
 
 impl From<&str> for SessionId {
     fn from(session_id: &str) -> Self {
-        SessionId(session_id.to_string())
+      Self(session_id.to_string())
     }
 }
 
@@ -352,8 +347,8 @@ pub enum PlaySessionError {
 impl fmt::Display for PlaySessionError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            PlaySessionError::RangeNotSupported => write!(f, "range not supported"),
-            PlaySessionError::ControlBroken => write!(f, "failed to control session"),
+          Self::RangeNotSupported => write!(f, "range not supported"),
+          Self::ControlBroken => write!(f, "failed to control session"),
         }
     }
 }

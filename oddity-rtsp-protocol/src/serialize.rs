@@ -8,6 +8,7 @@ use super::{
 };
 
 pub trait Serialize {
+    #[allow(clippy::missing_errors_doc)]
     fn serialize(self, dst: &mut BytesMut) -> Result<()>;
 }
 
@@ -21,8 +22,8 @@ impl Serialize for Request {
         dst.put_u8(b'\r');
         dst.put_u8(b'\n');
 
-        for (var, val) in self.headers.into_iter() {
-            dst.put(format!("{}: {}\r\n", var, val).as_bytes());
+        for (var, val) in self.headers {
+            dst.put(format!("{var}: {val}\r\n").as_bytes());
         }
 
         dst.put(b"\r\n".as_slice());
@@ -45,8 +46,8 @@ impl Serialize for Response {
         dst.put_u8(b'\r');
         dst.put_u8(b'\n');
 
-        for (var, val) in self.headers.into_iter() {
-            dst.put(format!("{}: {}\r\n", var, val).as_bytes());
+        for (var, val) in self.headers {
+            dst.put(format!("{var}: {val}\r\n").as_bytes());
         }
 
         dst.put(b"\r\n".as_slice());
@@ -62,9 +63,9 @@ impl Serialize for Response {
 impl Serialize for Version {
     fn serialize(self, dst: &mut BytesMut) -> Result<()> {
         let version = match self {
-            Version::V1 => b"RTSP/1.0".as_slice(),
-            Version::V2 => b"RTSP/2.0".as_slice(),
-            Version::Unknown => return Err(Error::VersionUnknown),
+            Self::V1 => b"RTSP/1.0".as_slice(),
+            Self::V2 => b"RTSP/2.0".as_slice(),
+            Self::Unknown => return Err(Error::VersionUnknown),
         };
 
         dst.put(version);
@@ -75,17 +76,17 @@ impl Serialize for Version {
 impl Serialize for Method {
     fn serialize(self, dst: &mut BytesMut) -> Result<()> {
         let method = match self {
-            Method::Describe => b"DESCRIBE".as_slice(),
-            Method::Announce => b"ANNOUNCE".as_slice(),
-            Method::Setup => b"SETUP".as_slice(),
-            Method::Play => b"PLAY".as_slice(),
-            Method::Pause => b"PAUSE".as_slice(),
-            Method::Record => b"RECORD".as_slice(),
-            Method::Options => b"OPTIONS".as_slice(),
-            Method::Redirect => b"REDIRECT".as_slice(),
-            Method::Teardown => b"TEARDOWN".as_slice(),
-            Method::GetParameter => b"GET_PARAMETER".as_slice(),
-            Method::SetParameter => b"SET_PARAMETER".as_slice(),
+            Self::Describe => b"DESCRIBE".as_slice(),
+            Self::Announce => b"ANNOUNCE".as_slice(),
+            Self::Setup => b"SETUP".as_slice(),
+            Self::Play => b"PLAY".as_slice(),
+            Self::Pause => b"PAUSE".as_slice(),
+            Self::Record => b"RECORD".as_slice(),
+            Self::Options => b"OPTIONS".as_slice(),
+            Self::Redirect => b"REDIRECT".as_slice(),
+            Self::Teardown => b"TEARDOWN".as_slice(),
+            Self::GetParameter => b"GET_PARAMETER".as_slice(),
+            Self::SetParameter => b"SET_PARAMETER".as_slice(),
         };
 
         dst.put(method);
@@ -324,7 +325,7 @@ CSeq: 2\r\n\
         assert!(matches!(
             request.serialize(&mut request_serialized),
             Err(Error::VersionUnknown)
-        ))
+        ));
     }
 
     #[test]

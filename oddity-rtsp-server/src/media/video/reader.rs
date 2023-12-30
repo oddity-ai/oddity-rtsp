@@ -49,7 +49,7 @@ impl StreamReader {
     }
 
     pub async fn stop(&mut self) {
-        if let Ok(()) = self.stop_tx.send(()) {
+        if self.stop_tx.send(()) == Ok(()) {
             if let Some(handle) = self.handle.take() {
                 tracing::trace!("sending stop signal to stream reader");
                 let _ = task::spawn_blocking(|| handle.join()).await;
@@ -58,6 +58,7 @@ impl StreamReader {
         }
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     fn run(
         mut reader: video::Reader,
         stream_index: usize,
@@ -126,6 +127,7 @@ impl StreamReader {
 }
 
 impl Drop for StreamReader {
+    #[allow(clippy::manual_assert)]
     fn drop(&mut self) {
         if self.handle.is_some() {
             panic!("Dropped `StreamReader` whilst running.");
@@ -140,7 +142,7 @@ struct Times {
 
 impl Times {
     pub fn new() -> Self {
-        Times {
+        Self {
             next_dts: video::Time::zero(),
             next_pts: video::Time::zero(),
         }
@@ -164,9 +166,10 @@ pub mod backend {
     use video_rs::{Error, Locator, Options, Reader};
 
     pub async fn make_reader_with_sane_settings(locator: Locator) -> Result<Reader, Error> {
+        #[allow(clippy::unwrap_used)]
         task::spawn_blocking(move || {
             let options = match locator {
-                Locator::Path(_) => Default::default(),
+                Locator::Path(_) => Options::default(),
                 Locator::Url(_) => {
                     // For streaming sources (live sources), we want to use TCP transport
                     // over UDP and have sane timeouts.

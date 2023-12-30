@@ -20,6 +20,7 @@ pub use oddity_sdp_protocol::Sdp;
 ///
 /// * `name` - Name of stream.
 /// * `descriptor` - Media stream descriptor.
+#[allow(clippy::similar_names)]
 pub async fn create(name: &str, descriptor: &MediaDescriptor) -> Result<Sdp, SdpError> {
     const ORIGIN_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
     const TARGET_DUMMY_HOST: [u8; 4] = [0, 0, 0, 0];
@@ -45,8 +46,7 @@ pub async fn create(name: &str, descriptor: &MediaDescriptor) -> Result<Sdp, Sdp
         // The `parameter_sets` function will return an error if the
         // underlying stream codec is not supported, we filter out
         // the stream in that case, and return `CodecNotSupported`.
-        .filter_map(Result::ok)
-        .next()
+        .find_map(Result::ok)
         .ok_or(SdpError::CodecNotSupported)?;
     tracing::trace!("sdp: found SPS and PPS");
 
@@ -68,8 +68,8 @@ pub async fn create(name: &str, descriptor: &MediaDescriptor) -> Result<Sdp, Sdp
         Kind::Video,
         TARGET_DUMMY_PORT,
         Protocol::RtpAvp,
-        codec_info,
-        Direction::ReceiveOnly,
+        &codec_info,
+        &Direction::ReceiveOnly,
     );
 
     tracing::trace!(%sdp, "generated sdp");
@@ -85,8 +85,8 @@ pub enum SdpError {
 impl fmt::Display for SdpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SdpError::CodecNotSupported => write!(f, "codec not supported"),
-            SdpError::Media(error) => write!(f, "media error: {}", error),
+            Self::CodecNotSupported => write!(f, "codec not supported"),
+            Self::Media(error) => write!(f, "media error: {error}"),
         }
     }
 }

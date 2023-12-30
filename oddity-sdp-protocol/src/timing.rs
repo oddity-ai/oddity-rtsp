@@ -18,8 +18,8 @@ impl From<TimeRange> for (u64, u64) {
 impl fmt::Display for TimeRange {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TimeRange::Live => write!(f, "live"),
-            TimeRange::Playback { start, end } => write!(f, "from {} to {}", start, end),
+            Self::Live => write!(f, "live"),
+            Self::Playback { start, end } => write!(f, "from {start} to {end}"),
         }
     }
 }

@@ -25,7 +25,7 @@ pub enum MaybeInterleaved<M: Message> {
 impl<M: Message> fmt::Display for MaybeInterleaved<M> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::Message(message) => write!(f, "{}", message),
+            Self::Message(message) => write!(f, "{message}"),
             Self::Interleaved { channel, payload } => write!(
                 f,
                 "interleaved payload over channel: {}, size: {}",
@@ -62,7 +62,7 @@ pub struct InterleavedParser {
 }
 
 impl InterleavedParser {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             channel_and_size: None,
         }

@@ -11,7 +11,7 @@ use super::{
 pub type RequestParser = Parser<Request>;
 pub type ResponseParser = Parser<Response>;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Status {
     Hungry,
     Done,
@@ -50,8 +50,7 @@ impl<M: Message> Parser<M> {
 
         match &self.state {
             State::Body(Body::Complete) => Ok(Status::Done),
-            State::Body(Body::Incomplete) => Ok(Status::Hungry),
-            State::Head(_) => Ok(Status::Hungry),
+            State::Body(Body::Incomplete) | State::Head(_) => Ok(Status::Hungry),
         }
     }
 
@@ -103,7 +102,7 @@ impl<M: Message> Parser<M> {
                 None => break,
             };
 
-            head = Self::parse_inner_head_line(&mut self.metadata, &mut self.headers, line, head)?;
+            head = Self::parse_inner_head_line(&mut self.metadata, &mut self.headers, &line, head)?;
         }
 
         Ok(head)
@@ -112,7 +111,7 @@ impl<M: Message> Parser<M> {
     fn parse_inner_head_line(
         metadata: &mut Option<M::Metadata>,
         headers: &mut BTreeMap<String, String>,
-        line: String,
+        line: &str,
         head: Head,
     ) -> Result<Head> {
         let line = line.trim();
@@ -122,14 +121,14 @@ impl<M: Message> Parser<M> {
                 Ok(Head::Header)
             }
             Head::Header => {
-                Ok(if !line.is_empty() {
-                    let (var, val) = parse_header(line)?;
-                    headers.insert(var, val);
-                    Head::Header
-                } else {
+                Ok(if line.is_empty() {
                     // The line is empty, so we got CRLF, which signals end of
                     // headers for this request.
                     Head::Done
+                } else {
+                    let (var, value) = parse_header(line)?;
+                    headers.insert(var, value);
+                    Head::Header
                 })
             }
             Head::Done => Err(Error::HeadAlreadyDone),
@@ -218,7 +217,7 @@ pub trait Parse: Sized {
 }
 
 impl Parse for RequestMetadata {
-    fn parse(line: &str) -> Result<RequestMetadata> {
+    fn parse(line: &str) -> Result<Self> {
         let mut parts = line.split(' ');
 
         let method = parts
@@ -253,12 +252,12 @@ impl Parse for RequestMetadata {
 
         let version = parse_version(version, line)?;
 
-        Ok(RequestMetadata::new(method, uri, version))
+        Ok(Self::new(method, uri, version))
     }
 }
 
 impl Parse for ResponseMetadata {
-    fn parse(line: &str) -> Result<ResponseMetadata> {
+    fn parse(line: &str) -> Result<Self> {
         let (version, rest) = line
             .split_once(' ')
             .ok_or_else(|| Error::StatusCodeMissing {
@@ -284,31 +283,34 @@ impl Parse for ResponseMetadata {
 
         let reason = rest.trim().to_string();
 
-        Ok(ResponseMetadata::new(version, status_code, reason))
+        Ok(Self::new(version, status_code, reason))
     }
 }
 
 fn parse_version(part: &str, line: &str) -> Result<Version> {
-    if let Some(stripped) = part.strip_prefix("RTSP/") {
-        Ok(match stripped {
-            "1.0" => Version::V1,
-            "2.0" => Version::V2,
-            _ => Version::Unknown,
-        })
-    } else {
-        Err(Error::VersionMalformed {
-            line: line.to_string(),
-            version: part.to_string(),
-        })
-    }
+    part.strip_prefix("RTSP/").map_or_else(
+        || {
+            Err(Error::VersionMalformed {
+                line: line.to_string(),
+                version: part.to_string(),
+            })
+        },
+        |stripped| {
+            Ok(match stripped {
+                "1.0" => Version::V1,
+                "2.0" => Version::V2,
+                _ => Version::Unknown,
+            })
+        },
+    )
 }
 
 fn parse_header(line: &str) -> Result<(String, String)> {
-    let (var, val) = line.split_once(':').ok_or_else(|| Error::HeaderMalformed {
+    let (var, value) = line.split_once(':').ok_or_else(|| Error::HeaderMalformed {
         line: line.to_string(),
     })?;
 
-    Ok((var.trim().to_string(), val.trim().to_string()))
+    Ok((var.trim().to_string(), value.trim().to_string()))
 }
 
 #[cfg(test)]
@@ -322,12 +324,12 @@ mod tests {
 
     #[test]
     fn parse_options_request() {
-        let request = br###"OPTIONS rtsp://example.com/media.mp4 RTSP/1.0
+        let request = br"OPTIONS rtsp://example.com/media.mp4 RTSP/1.0
 CSeq: 1
 Require: implicit-play
 Proxy-Require: gzipped-messages
 
-"###;
+";
 
         let request = RequestParser::new()
             .parse_and_into_request(request.as_slice())
@@ -348,10 +350,10 @@ Proxy-Require: gzipped-messages
 
     #[test]
     fn parse_options_request_any() {
-        let request = br###"OPTIONS * RTSP/1.0
+        let request = br"OPTIONS * RTSP/1.0
 CSeq: 1
 
-"###;
+";
 
         let request = RequestParser::new()
             .parse_and_into_request(request.as_slice())
@@ -364,11 +366,11 @@ CSeq: 1
 
     #[test]
     fn parse_options_response() {
-        let response = br###"RTSP/1.0 200 OK
+        let response = br"RTSP/1.0 200 OK
 CSeq: 1
 Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
 
-"###;
+";
 
         let response = ResponseParser::new()
             .parse_and_into_response(response.as_slice())
@@ -386,10 +388,10 @@ Public: DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE
 
     #[test]
     fn parse_options_response_error() {
-        let response = br###"RTSP/1.0 404 Stream Not Found
+        let response = br"RTSP/1.0 404 Stream Not Found
 CSeq: 1
 
-"###;
+";
 
         let response = ResponseParser::new()
             .parse_and_into_response(response.as_slice())
@@ -403,10 +405,10 @@ CSeq: 1
 
     #[test]
     fn parse_describe_request() {
-        let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/1.0
+        let request = br"DESCRIBE rtsp://example.com/media.mp4 RTSP/1.0
 CSeq: 2
 
-"###;
+";
 
         let request = RequestParser::new()
             .parse_and_into_request(request.as_slice())
@@ -419,10 +421,10 @@ CSeq: 2
 
     #[test]
     fn parse_describe_request_v2() {
-        let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/2.0
+        let request = br"DESCRIBE rtsp://example.com/media.mp4 RTSP/2.0
 CSeq: 2
 
-"###;
+";
 
         let request = RequestParser::new()
             .parse_and_into_request(request.as_slice())
@@ -435,10 +437,10 @@ CSeq: 2
 
     #[test]
     fn parse_describe_request_v3() {
-        let request = br###"DESCRIBE rtsp://example.com/media.mp4 RTSP/3.0
+        let request = br"DESCRIBE rtsp://example.com/media.mp4 RTSP/3.0
 CSeq: 2
 
-"###;
+";
 
         let request = RequestParser::new()
             .parse_and_into_request(request.as_slice())
@@ -451,7 +453,7 @@ CSeq: 2
 
     #[test]
     fn parse_describe_response() {
-        let response = br###"RTSP/1.0 200 OK
+        let response = br#"RTSP/1.0 200 OK
 CSeq: 2
 Content-Base: rtsp://example.com/media.mp4
 Content-Type: application/sdp
@@ -472,7 +474,7 @@ a=length:npt=7.712000
 a=rtpmap:97 mpeg4-generic/32000/2
 a=mimetype:string;"audio/mpeg4-generic"
 a=AvgBitRate:integer;65790
-a=StreamName:string;"hinted audio track""###;
+a=StreamName:string;"hinted audio track""#;
 
         let response = ResponseParser::new()
             .parse_and_into_response(response.as_slice())
@@ -495,7 +497,7 @@ a=StreamName:string;"hinted audio track""###;
         );
     }
 
-    const EXAMPLE_PIPELINED_REQUESTS: &[u8] = br###"RECORD rtsp://example.com/media.mp4 RTSP/1.0
+    const EXAMPLE_PIPELINED_REQUESTS: &[u8] = br"RECORD rtsp://example.com/media.mp4 RTSP/1.0
 CSeq: 6
 Session: 12345678
 
@@ -520,7 +522,7 @@ m=video 2232 RTP/AVP 31TEARDOWN rtsp://example.com/media.mp4 RTSP/1.0
 CSeq: 8
 Session: 12345678
 
-"###;
+";
 
     #[test]
     fn parse_pipelined_requests() {
@@ -545,7 +547,7 @@ Session: 12345678
 
         let mut requests = Vec::new();
         for i in 0..EXAMPLE_PIPELINED_REQUESTS.len() {
-            buffer.extend_from_slice(&EXAMPLE_PIPELINED_REQUESTS[i..i + 1]);
+            buffer.extend_from_slice(&EXAMPLE_PIPELINED_REQUESTS[i..=i]);
             if parser.parse(&mut buffer).unwrap() == Status::Done {
                 requests.push(parser.into_request().unwrap());
                 parser = RequestParser::new();
@@ -566,7 +568,7 @@ Session: 12345678
         loop {
             let piece_range = start..(start + size).min(EXAMPLE_PIPELINED_REQUESTS.len());
             buffer.extend_from_slice(&EXAMPLE_PIPELINED_REQUESTS[piece_range]);
-            if let Status::Done = parser.parse(&mut buffer).unwrap() {
+            if matches!(parser.parse(&mut buffer).unwrap(), Status::Done) {
                 requests.push(parser.into_request().unwrap());
                 parser = RequestParser::new();
             }
@@ -714,7 +716,7 @@ Content-Length: 16\r\n\
             .collect::<Bytes>()
     }
 
-    fn request_play_crln() -> Bytes {
+    const fn request_play_crln() -> Bytes {
         Bytes::from_static(EXAMPLE_REQUEST_PLAY_CRLN)
     }
 
@@ -724,7 +726,7 @@ Content-Length: 16\r\n\
 
         let upto_last = request_bytes.len() - 1;
         for i in 0..upto_last {
-            let i_range = i..i + 1;
+            let i_range = i..=i;
             buffer.extend_from_slice(&request_bytes[i_range]);
             assert_eq!(parser.parse(&mut buffer).unwrap(), Status::Hungry);
         }
@@ -766,7 +768,7 @@ Content-Length: 16\r\n\
         loop {
             let piece_range = start..(start + size).min(request_bytes.len());
             buffer.extend_from_slice(&request_bytes[piece_range]);
-            if let Status::Done = parser.parse(&mut buffer).unwrap() {
+            if matches!(parser.parse(&mut buffer).unwrap(), Status::Done) {
                 break;
             }
             start += size;

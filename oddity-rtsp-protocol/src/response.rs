@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 use super::{
     message::{
@@ -33,15 +33,18 @@ impl Message for Response {
 }
 
 impl Response {
+    #[must_use]
     pub fn ok() -> ResponseBuilder {
         ResponseBuilder::ok()
     }
 
+    #[must_use]
     pub fn error(status: Status) -> ResponseBuilder {
         ResponseBuilder::error(status)
     }
 
-    pub fn status(&self) -> StatusCategory {
+    #[must_use]
+    pub const fn status(&self) -> StatusCategory {
         match self.status {
             s if s >= 600 => StatusCategory::Unknown,
             s if s >= 500 => StatusCategory::ServerError,
@@ -85,7 +88,7 @@ pub struct ResponseMetadata {
 }
 
 impl ResponseMetadata {
-    pub(super) fn new(version: Version, status: StatusCode, reason: String) -> Self {
+    pub(super) const fn new(version: Version, status: StatusCode, reason: String) -> Self {
         Self {
             version,
             status,
@@ -99,27 +102,27 @@ pub struct ResponseBuilder {
 }
 
 impl ResponseBuilder {
-    pub fn from_status(status: Status) -> ResponseBuilder {
-        ResponseBuilder {
+    pub fn from_status(status: Status) -> Self {
+        Self {
             response: Response {
-                version: Default::default(),
+                version: Version::default(),
                 status: status_to_code(status),
                 reason: status_to_reason(status).to_string(),
-                headers: Default::default(),
-                body: Default::default(),
+                headers: BTreeMap::default(),
+                body: Option::None,
             },
         }
     }
 
-    pub fn ok() -> ResponseBuilder {
+    pub fn ok() -> Self {
         Self::from_status(Status::Ok)
     }
 
-    pub fn error(status: Status) -> ResponseBuilder {
+    pub fn error(status: Status) -> Self {
         Self::from_status(status)
     }
 
-    pub fn with_cseq_of(mut self, request: &Request) -> ResponseBuilder {
+    pub fn with_cseq_of(mut self, request: &Request) -> Self {
         if let Some(cseq) = request.headers.get("CSeq") {
             self.response
                 .headers
@@ -128,14 +131,18 @@ impl ResponseBuilder {
         self
     }
 
-    pub fn with_header(mut self, var: impl ToString, val: impl ToString) -> ResponseBuilder {
+    pub fn with_header<VAR, VALUE>(mut self, var: &VAR, value: &VALUE) -> Self
+    where
+        VAR: ToString + ?Sized,
+        VALUE: ToString + ?Sized,
+    {
         self.response
             .headers
-            .insert(var.to_string(), val.to_string());
+            .insert(var.to_string(), value.to_string());
         self
     }
 
-    pub fn with_rtp_info(mut self, rtp_info: impl IntoIterator<Item = RtpInfo>) -> ResponseBuilder {
+    pub fn with_rtp_info(mut self, rtp_info: impl IntoIterator<Item = RtpInfo>) -> Self {
         self.response.headers.insert(
             "RTP-Info".to_string(),
             rtp_info
@@ -147,15 +154,15 @@ impl ResponseBuilder {
         self
     }
 
-    pub fn with_body(mut self, body: Bytes, content_type: &str) -> ResponseBuilder {
+    pub fn with_body(mut self, body: Bytes, content_type: &str) -> Self {
         self = self
-            .with_header("Content-Length", body.len())
-            .with_header("Content-Type", content_type);
+            .with_header("Content-Length", &body.len())
+            .with_header("Content-Type", &content_type);
         self.response.body = Some(body);
         self
     }
 
-    pub fn with_sdp(self, contents: String) -> ResponseBuilder {
+    pub fn with_sdp(self, contents: String) -> Self {
         self.with_body(Bytes::from(contents), "application/sdp")
     }
 

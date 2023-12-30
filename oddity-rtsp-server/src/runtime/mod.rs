@@ -13,11 +13,11 @@ impl Runtime {
         }
     }
 
-    pub fn task(&self) -> &TaskManager {
+    pub const fn task(&self) -> &TaskManager {
         &self.task_manager
     }
 
     pub async fn stop(&self) {
-        self.task_manager.stop().await
+        self.task_manager.stop().await;
     }
 }

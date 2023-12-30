@@ -57,6 +57,7 @@ impl SourceManager {
         }
     }
 
+    #[allow(clippy::significant_drop_in_scrutinee)]
     pub async fn stop(&mut self) {
         tracing::trace!("sending stop signal to source manager");
         self.worker.stop().await;
@@ -92,6 +93,7 @@ impl SourceManager {
             return Err(RegisterSourceError::AlreadyRegistered);
         }
 
+        #[allow(clippy::unwrap_used)]
         self.describe(&path)
             .await
             .unwrap()
@@ -150,19 +152,16 @@ impl SourceManager {
             select! {
               // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
               state = source_state_rx.recv() => {
-                match state {
-                  Some(SourceState::Stopped(source_id)) => {
+                if let Some(SourceState::Stopped(source_id)) = state {
                     tracing::trace!(%source_id, "source manager: received stopped");
                     let _ = sources.write().await.remove(&source_id);
-                  },
-                  None => {
+                } else {
                     tracing::error!("source state channel broke unexpectedly");
                     break;
-                  },
                 }
               },
               // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
+              () = task_context.wait_for_stop() => {
                 tracing::trace!("stopping source manager");
                 break;
               },
@@ -181,9 +180,9 @@ pub enum RegisterSourceError {
 impl fmt::Display for RegisterSourceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            RegisterSourceError::AlreadyRegistered => write!(f, "already registered"),
-            RegisterSourceError::Media(err) => write!(f, "media error: {}", err),
-            RegisterSourceError::Sdp(err) => write!(f, "sdp error: {}", err),
+            Self::AlreadyRegistered => write!(f, "already registered"),
+            Self::Media(err) => write!(f, "media error: {err}"),
+            Self::Sdp(err) => write!(f, "sdp error: {err}"),
         }
     }
 }

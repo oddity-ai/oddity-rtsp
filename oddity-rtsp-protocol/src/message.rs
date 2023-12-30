@@ -15,7 +15,7 @@ pub trait Message: Serialize + fmt::Display {
 
 pub type Headers = BTreeMap<String, String>;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum Method {
     Describe,
     Announce,
@@ -33,17 +33,17 @@ pub enum Method {
 impl fmt::Display for Method {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Method::Describe => write!(f, "DESCRIBE"),
-            Method::Announce => write!(f, "ANNOUNCE"),
-            Method::Setup => write!(f, "SETUP"),
-            Method::Play => write!(f, "PLAY"),
-            Method::Pause => write!(f, "PAUSE"),
-            Method::Record => write!(f, "RECORD"),
-            Method::Options => write!(f, "OPTIONS"),
-            Method::Redirect => write!(f, "REDIRECT"),
-            Method::Teardown => write!(f, "TEARDOWN"),
-            Method::GetParameter => write!(f, "GET_PARAMETER"),
-            Method::SetParameter => write!(f, "SET_PARAMETER"),
+            Self::Describe => write!(f, "DESCRIBE"),
+            Self::Announce => write!(f, "ANNOUNCE"),
+            Self::Setup => write!(f, "SETUP"),
+            Self::Play => write!(f, "PLAY"),
+            Self::Pause => write!(f, "PAUSE"),
+            Self::Record => write!(f, "RECORD"),
+            Self::Options => write!(f, "OPTIONS"),
+            Self::Redirect => write!(f, "REDIRECT"),
+            Self::Teardown => write!(f, "TEARDOWN"),
+            Self::GetParameter => write!(f, "GET_PARAMETER"),
+            Self::SetParameter => write!(f, "SET_PARAMETER"),
         }
     }
 }
@@ -53,17 +53,17 @@ impl FromStr for Method {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "DESCRIBE" => Ok(Method::Describe),
-            "ANNOUNCE" => Ok(Method::Announce),
-            "SETUP" => Ok(Method::Setup),
-            "PLAY" => Ok(Method::Play),
-            "PAUSE" => Ok(Method::Pause),
-            "RECORD" => Ok(Method::Record),
-            "OPTIONS" => Ok(Method::Options),
-            "REDIRECT" => Ok(Method::Redirect),
-            "TEARDOWN" => Ok(Method::Teardown),
-            "GET_PARAMETER" => Ok(Method::GetParameter),
-            "SET_PARAMETER" => Ok(Method::SetParameter),
+            "DESCRIBE" => Ok(Self::Describe),
+            "ANNOUNCE" => Ok(Self::Announce),
+            "SETUP" => Ok(Self::Setup),
+            "PLAY" => Ok(Self::Play),
+            "PAUSE" => Ok(Self::Pause),
+            "RECORD" => Ok(Self::Record),
+            "OPTIONS" => Ok(Self::Options),
+            "REDIRECT" => Ok(Self::Redirect),
+            "TEARDOWN" => Ok(Self::Teardown),
+            "GET_PARAMETER" => Ok(Self::GetParameter),
+            "SET_PARAMETER" => Ok(Self::SetParameter),
             _ => Err(Error::MethodUnknown {
                 method: s.to_string(),
             }),
@@ -71,7 +71,7 @@ impl FromStr for Method {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Version {
     V1,
     V2,
@@ -80,24 +80,24 @@ pub enum Version {
 
 impl Default for Version {
     #[inline]
-    fn default() -> Version {
-        Version::V1
+    fn default() -> Self {
+        Self::V1
     }
 }
 
 impl fmt::Display for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Version::V1 => write!(f, "1.0"),
-            Version::V2 => write!(f, "2.0"),
-            Version::Unknown => write!(f, "?"),
+            Self::V1 => write!(f, "1.0"),
+            Self::V2 => write!(f, "2.0"),
+            Self::Unknown => write!(f, "?"),
         }
     }
 }
 
 pub type StatusCode = usize;
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum StatusCategory {
     Informational,
     Success,
@@ -107,7 +107,7 @@ pub enum StatusCategory {
     Unknown,
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Status {
     Continue,
     Ok,
@@ -154,7 +154,7 @@ pub enum Status {
     OptionNotSupported,
 }
 
-pub(crate) fn status_to_code(status: Status) -> StatusCode {
+pub const fn status_to_code(status: Status) -> StatusCode {
     match status {
         Status::Continue => 100,
         Status::Ok => 200,
@@ -202,7 +202,7 @@ pub(crate) fn status_to_code(status: Status) -> StatusCode {
     }
 }
 
-pub(crate) fn status_to_reason(status: Status) -> &'static str {
+pub const fn status_to_reason(status: Status) -> &'static str {
     match status {
         Status::Continue => "Continue",
         Status::Ok => "OK",

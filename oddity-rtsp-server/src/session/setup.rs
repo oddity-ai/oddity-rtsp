@@ -17,6 +17,7 @@ pub struct SessionSetup {
 }
 
 impl SessionSetup {
+    #[allow(clippy::future_not_send)]
     pub async fn from_rtsp_candidate_transports(
         candidate_transports: impl IntoIterator<Item = rtsp::Transport>,
         media_info: MediaInfo,
@@ -76,6 +77,8 @@ pub struct SendInterleaved {
 }
 
 impl SessionSetupTarget {
+
+    #[allow(clippy::similar_names)]
     pub fn from_rtsp_transport(
         rtsp_transport: &rtsp::Transport,
         sender: ResponseSenderTx,
@@ -88,7 +91,7 @@ impl SessionSetupTarget {
                     rtsp::Port::Range(rtp_port, rtcp_port) => (*rtp_port, *rtcp_port),
                 };
 
-                SessionSetupTarget::RtpUdp(SendOverSocket {
+                Self::RtpUdp(SendOverSocket {
                     rtp_remote: (*client_ip_addr, client_rtp_port).into(),
                     rtcp_remote: (*client_ip_addr, client_rtcp_port).into(),
                 })
@@ -101,7 +104,7 @@ impl SessionSetupTarget {
                     }
                 };
 
-                SessionSetupTarget::RtpTcp(SendInterleaved {
+                Self::RtpTcp(SendInterleaved {
                     sender,
                     rtp_channel,
                     rtcp_channel,
@@ -121,9 +124,9 @@ pub enum SessionSetupError {
 impl fmt::Display for SessionSetupError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            SessionSetupError::TransportNotSupported => write!(f, "transport not supported"),
-            SessionSetupError::DestinationInvalid => write!(f, "destination invalid"),
-            SessionSetupError::Media(error) => write!(f, "media error: {}", error),
+            Self::TransportNotSupported => write!(f, "transport not supported"),
+            Self::DestinationInvalid => write!(f, "destination invalid"),
+            Self::Media(error) => write!(f, "media error: {error}"),
         }
     }
 }

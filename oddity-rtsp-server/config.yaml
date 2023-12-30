@@ -1,0 +1,9 @@
+server:
+  host: 0.0.0.0
+  port: 5554
+media:
+  - name: "Big Buck Bunny"
+    path: "/example"
+    kind: file
+    source: rtsp://admin:@192.168.1.16:554/h264Preview_01_main
+#    source: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"

@@ -32,7 +32,8 @@ pub struct App {
 }
 
 impl App {
-    pub async fn start(config: AppConfig) -> Result<App, Box<dyn Error>> {
+    #[allow(clippy::missing_errors_doc, clippy::future_not_send)]
+    pub async fn start(config: AppConfig) -> Result<Self, Box<dyn Error>> {
         let runtime = Arc::new(Runtime::new());
 
         let mut context = initialize_context(runtime.clone()).await;
@@ -75,7 +76,7 @@ async fn initialize_server(
         runtime.clone(),
     )
     .await
-    .map_err(|err| err.into())
+    .map_err(Into::into)
 }
 
 async fn initialize_context(runtime: Arc<Runtime>) -> AppContext {
@@ -85,12 +86,13 @@ async fn initialize_context(runtime: Arc<Runtime>) -> AppContext {
     }
 }
 
+#[allow(clippy::missing_errors_doc, clippy::future_not_send, clippy::needless_pass_by_ref_mut)]
 async fn register_sources_with_context(
     config: &AppConfig,
     context: &mut AppContext,
 ) -> Result<(), Box<dyn Error>> {
     tracing::trace!("registering sources");
-    for item in config.media.iter() {
+    for item in &config.media {
         tracing::info!(%item, "registering source");
         context
             .source_manager
