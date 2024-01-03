@@ -1,7 +1,9 @@
 [workspace]
 resolver = "2"
-members = [
-    "oddity-rtsp-protocol",
-    "oddity-rtsp-server",
-    "oddity-sdp-protocol"
-]
+members = ["oddity-rtsp-protocol", "oddity-rtsp-server", "oddity-sdp-protocol"]
+
+[workspace.dependencies]
+oddity-rtsp-protocol = { path = "oddity-rtsp-protocol" }
+oddity-rtsp-server = { path = "oddity-rtsp-server" }
+oddity-sdp-protocol = { path = "oddity-sdp-protocol" }
+video-rs = { version = "0.5.0" }
