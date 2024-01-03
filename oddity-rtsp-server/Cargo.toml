@@ -6,15 +6,18 @@ license = "MIT OR Apache-2.0"
 edition = "2021"
 
 [dependencies]
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-serde = { version = "1.0", features = ["derive"] }
 config = { version = "0.13", default-features = false, features = ["yaml"] }
-rand = "0.8"
 futures = "0.3"
+oddity-rtsp-protocol = { workspace = true, features = ["tokio-codec"] }
+oddity-sdp-protocol = { workspace = true }
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1" }
-tokio-util = { version = "0.7.1", default-features = false, features = ["codec"] }
-video-rs = "0.2.4"
-oddity-rtsp-protocol = { path = "../oddity-rtsp-protocol", features = ["tokio-codec"] }
-oddity-sdp-protocol = { path = "../oddity-sdp-protocol" }
+tokio-util = { version = "0.7.1", default-features = false, features = [
+    "codec",
+] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+video-rs = { workspace = true }
+

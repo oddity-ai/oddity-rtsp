@@ -1,5 +1,7 @@
 use std::fmt::Write;
 
+use base64::engine::Engine;
+
 pub use super::{fmt::FMT_RTP_PAYLOAD_DYNAMIC, Tag};
 
 pub trait MediaAttributes {
@@ -58,8 +60,11 @@ fn h264_fmtp(packetization_mode: usize, sps: &[u8], pps: &[&[u8]]) -> Tag {
         });
 
     let mut parameter_sets = Vec::with_capacity(1 + pps.len());
-    parameter_sets.push(base64::encode(sps));
-    parameter_sets.extend(pps.iter().map(base64::encode));
+    parameter_sets.push(base64::engine::general_purpose::STANDARD.encode(sps));
+    parameter_sets.extend(
+        pps.iter()
+            .map(|pps| base64::engine::general_purpose::STANDARD.encode(pps)),
+    );
     let sprop_parameter_sets = parameter_sets.join(",");
 
     Tag::Value(
