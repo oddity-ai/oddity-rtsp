@@ -12,7 +12,7 @@ use crate::session::transport;
 
 pub struct SessionSetup {
     pub rtsp_transport: rtsp::Transport,
-    pub rtp_muxer: video::RtpMuxer,
+    pub rtp_muxer: video::rtp::RtpMuxer,
     pub rtp_target: SessionSetupTarget,
 }
 
@@ -29,10 +29,10 @@ impl SessionSetup {
         tracing::trace!(%transport, "selected transport");
 
         tracing::trace!("initializing muxer");
-        rtp_muxer::make_rtp_muxer()
+        rtp_muxer::make_rtp_muxer_builder()
             .await
             .map_err(SessionSetupError::Media)
-            .and_then(|mut rtp_muxer| {
+            .and_then(|mut rtp_muxer_builder| {
                 let resolved_transport = transport::resolve_transport(&transport);
                 tracing::trace!(%resolved_transport, "resolved transport");
                 let rtp_target =
@@ -42,11 +42,12 @@ impl SessionSetup {
 
                 for stream_info in media_info.streams {
                     tracing::trace!(stream_index = stream_info.index, "adding stream to muxer");
-                    rtp_muxer = rtp_muxer
+                    rtp_muxer_builder = rtp_muxer_builder
                         .with_stream(stream_info)
                         .map_err(SessionSetupError::Media)?;
                 }
 
+                let rtp_muxer = rtp_muxer_builder.build();
                 Ok(Self {
                     rtsp_transport: resolved_transport,
                     rtp_muxer,

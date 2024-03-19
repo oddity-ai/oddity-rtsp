@@ -163,7 +163,7 @@ impl Session {
     async fn run_tcp_interleaved(
         id: SessionId,
         source_delegate: SourceDelegate,
-        mut muxer: video::RtpMuxer,
+        mut muxer: video::rtp::RtpMuxer,
         target: setup::SendInterleaved,
         mut control_rx: SessionControlRx,
         stream_state_tx: SessionStreamStateTx,
@@ -176,125 +176,122 @@ impl Session {
 
         'main: loop {
             select! {
-              // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
-              reset = source_reset_rx.recv() => {
-                // If the source reader had an error and reinitialized its reader, then regained
-                // the connection, we must reinitialize our muxer as well to cope.
-                match reset {
-                  Ok(media_info) => {
-                    tracing::trace!("reinitializing muxer");
-                    let new_muxer = rtp_muxer::make_rtp_muxer()
-                      .await
-                      .and_then(|mut rtp_muxer| {
-                        for stream_info in media_info.streams {
-                          tracing::trace!(
-                            stream_index=stream_info.index,
-                            "reinitializing muxer: adding stream to muxer",
-                          );
-                          rtp_muxer = rtp_muxer.with_stream(stream_info)?;
-                        }
-                        Ok(rtp_muxer)
-                      });
+                // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
+                reset = source_reset_rx.recv() => {
+                    // If the source reader had an error and reinitialized its reader, then regained
+                    // the connection, we must reinitialize our muxer as well to cope.
+                    match reset {
+                        Ok(media_info) => {
+                            tracing::trace!("reinitializing muxer");
+                            let new_muxer = rtp_muxer::make_rtp_muxer_builder()
+                                .await
+                                .and_then(|mut rtp_muxer_builder| {
+                                    for stream_info in media_info.streams {
+                                        tracing::trace!(
+                                            stream_index=stream_info.index,
+                                            "reinitializing muxer: adding stream to muxer",
+                                        );
+                                        rtp_muxer_builder = rtp_muxer_builder.with_stream(stream_info)?;
+                                    }
+                                    Ok(rtp_muxer_builder)
+                                })
+                                .map(|rtp_muxer_builder| rtp_muxer_builder.build());
 
-                    match new_muxer {
-                      Ok(new_muxer) => {
-                        muxer = new_muxer;
-                      },
-                      Err(err) => {
-                        tracing::error!(%err, %id, "failed to reinitialize muxer");
-                      },
-                    };
-                  },
-                  Err(_) => {
-                    tracing::error!(%id, "source broken");
-                    break;
-                  },
-                }
-              },
-              // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
-              packet = source_packet_rx.recv() => {
-                match packet {
-                  Ok(packet) => {
-                    let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
-                    muxer = muxed;
-
-                    if need_stream_state {
-                      tracing::trace!(%id, "fetching stream state");
-                      let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
-                      let stream_state = media::StreamState {
-                        rtp_seq,
-                        rtp_timestamp,
-                      };
-                      tracing::trace!(%id, rtp_seq, rtp_timestamp, "fetched stream state");
-                      let _ = stream_state_tx.send(stream_state);
-
-                      need_stream_state = false;
+                            match new_muxer {
+                                Ok(new_muxer) => {
+                                    muxer = new_muxer;
+                                },
+                                Err(err) => {
+                                    tracing::error!(%err, %id, "failed to reinitialize muxer");
+                                },
+                            };
+                        },
+                        Err(_) => {
+                            tracing::error!(%id, "source broken");
+                            break;
+                        },
                     }
+                },
+                // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
+                packet = source_packet_rx.recv() => {
+                    match packet {
+                        Ok(packet) => {
+                            let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
+                            muxer = muxed;
 
-                    let packet = match packet {
-                      Ok(packet) => packet,
-                      Err(err) => {
-                        tracing::error!(%id, %err, "failed to mux packet");
-                        break;
-                      },
-                    };
+                            if need_stream_state {
+                                tracing::trace!(%id, "fetching stream state");
+                                let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
+                                let stream_state = media::StreamState {
+                                    rtp_seq,
+                                    rtp_timestamp,
+                                };
+                                tracing::trace!(%id, rtp_seq, rtp_timestamp, "fetched stream state");
+                                let _ = stream_state_tx.send(stream_state);
 
-                    if state == SessionMediaState::Playing {
-                      let messages = packet
-                        .into_iter()
-                        .map(|item| {
-                          match item {
-                            video::RtpBuf::Rtp(payload) => {
-                              rtsp::ResponseMaybeInterleaved::Interleaved {
-                                channel: target.rtp_channel,
-                                payload: payload.into(),
-                              }
-                            },
-                            video::RtpBuf::Rtcp(payload) => {
-                              rtsp::ResponseMaybeInterleaved::Interleaved {
-                                channel: target.rtcp_channel,
-                                payload: payload.into(),
-                              }
-                            },
-                          }
-                        });
+                                need_stream_state = false;
+                            }
 
-                      for message in messages {
-                        if let Err(err) = target.sender.send(message) {
-                          tracing::trace!(%id, %err, "underlying connection closed");
-                          break 'main;
+                            let packet = match packet {
+                                Ok(packet) => packet,
+                                Err(err) => {
+                                    tracing::error!(%id, %err, "failed to mux packet");
+                                    break;
+                                }
+                            };
+
+                            if state == SessionMediaState::Playing {
+                                let messages = packet.into_iter().map(|item| match item {
+                                    video::rtp::RtpBuf::Rtp(payload) => {
+                                        rtsp::ResponseMaybeInterleaved::Interleaved {
+                                            channel: target.rtp_channel,
+                                            payload: payload.into(),
+                                        }
+                                    }
+                                    video::rtp::RtpBuf::Rtcp(payload) => {
+                                        rtsp::ResponseMaybeInterleaved::Interleaved {
+                                            channel: target.rtcp_channel,
+                                            payload: payload.into(),
+                                        }
+                                    }
+                                });
+
+                                for message in messages {
+                                    if let Err(err) = target.sender.send(message) {
+                                        tracing::trace!(%id, %err, "underlying connection closed");
+                                        break 'main;
+                                    }
+                                }
+                            }
                         }
-                      }
+                        Err(_) => {
+                            tracing::error!(%id, "source broken");
+                            break;
+                        }
                     }
-                  }
-                  Err(_) => {
-                    tracing::error!(%id, "source broken");
+                },
+                // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
+                message = control_rx.recv() => {
+                    match message {
+                        Some(SessionControlMessage::Play) => {
+                            state = SessionMediaState::Playing;
+                            tracing::info!(%id, "session now playing");
+                        },
+                        Some(SessionControlMessage::StreamState) => {
+                            need_stream_state = true;
+                            tracing::trace!(%id, "set need stream state flag");
+                        },
+                        None => {
+                            tracing::error!(%id, "session control channel broke unexpectedly");
+                            break;
+                        },
+                    };
+                },
+                // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
+                _ = task_context.wait_for_stop() => {
+                    tracing::trace!("tearing down session");
                     break;
-                  },
-                }
-              },
-              // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
-              message = control_rx.recv() => {
-                match message {
-                  Some(SessionControlMessage::Play) => {
-                    state = SessionMediaState::Playing;
-                    tracing::info!(%id, "session now playing");
-                  },
-                  Some(SessionControlMessage::StreamState) => {
-                    need_stream_state = true;
-                    tracing::trace!(%id, "set need stream state flag");
-                  },
-                  None => {
-                    tracing::error!(%id, "session control channel broke unexpectedly");
-                    break;
-                  },
-                };
-              },
-              // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
-                tracing::trace!("tearing down session");
-                break;
-              },
+                },
             }
         }
 

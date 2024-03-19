@@ -33,10 +33,11 @@ pub async fn create(name: &str, descriptor: &MediaDescriptor) -> Result<Sdp, Sdp
     tracing::trace!(best_video_stream, "sdp: initialized reader");
 
     tracing::trace!("sdp: initializing muxer");
-    let muxer = rtp_muxer::make_rtp_muxer()
+    let muxer = rtp_muxer::make_rtp_muxer_builder()
         .await
         .and_then(|muxer| muxer.with_stream(reader.stream_info(best_video_stream)?))
-        .map_err(SdpError::Media)?;
+        .map_err(SdpError::Media)?
+        .build();
     tracing::trace!("sdp: initialized muxer");
 
     let (sps, pps) = muxer
@@ -45,8 +46,7 @@ pub async fn create(name: &str, descriptor: &MediaDescriptor) -> Result<Sdp, Sdp
         // The `parameter_sets` function will return an error if the
         // underlying stream codec is not supported, we filter out
         // the stream in that case, and return `CodecNotSupported`.
-        .filter_map(Result::ok)
-        .next()
+        .find_map(Result::ok)
         .ok_or(SdpError::CodecNotSupported)?;
     tracing::trace!("sdp: found SPS and PPS");
 
