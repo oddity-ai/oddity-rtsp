@@ -1,14 +1,14 @@
 pub mod sdp;
 pub mod video;
 
-use video_rs::StreamInfo;
+use video_rs::stream::StreamInfo;
 
 pub use video_rs::Packet;
 
 use std::fmt;
 use std::path::PathBuf;
 
-use video_rs::{Error, Locator, Reader, Url};
+use video_rs::{Error, Location, Reader, Url};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -27,11 +27,11 @@ impl fmt::Display for MediaDescriptor {
     }
 }
 
-impl From<MediaDescriptor> for Locator {
+impl From<MediaDescriptor> for Location {
     fn from(descriptor: MediaDescriptor) -> Self {
         match descriptor {
-            MediaDescriptor::File(path) => Locator::Path(path),
-            MediaDescriptor::Stream(url) => Locator::Url(url),
+            MediaDescriptor::File(path) => Location::File(path),
+            MediaDescriptor::Stream(url) => Location::Network(url),
         }
     }
 }

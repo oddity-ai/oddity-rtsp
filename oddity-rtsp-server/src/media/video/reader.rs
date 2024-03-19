@@ -161,20 +161,20 @@ pub mod backend {
 
     use tokio::task;
 
-    use video_rs::{Error, Locator, Options, Reader};
+    use video_rs::{Error, Location, Options, Reader, ReaderBuilder};
 
-    pub async fn make_reader_with_sane_settings(locator: Locator) -> Result<Reader, Error> {
+    pub async fn make_reader_with_sane_settings(location: Location) -> Result<Reader, Error> {
         task::spawn_blocking(move || {
-            let options = match locator {
-                Locator::Path(_) => Default::default(),
-                Locator::Url(_) => {
+            let options = match location {
+                Location::File(_) => Default::default(),
+                Location::Network(_) => {
                     // For streaming sources (live sources), we want to use TCP transport
                     // over UDP and have sane timeouts.
-                    Options::new_with_rtsp_transport_tcp_and_sane_timeouts()
+                    Options::preset_rtsp_transport_tcp_and_sane_timeouts()
                 }
             };
 
-            Reader::new_with_options(&locator, &options)
+            ReaderBuilder::new(location).with_options(&options).build()
         })
         .await
         .unwrap()
