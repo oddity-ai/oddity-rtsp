@@ -1,0 +1,8 @@
+server:
+  host: 0.0.0.0
+  port: 5554
+media:
+  - name: "Big Buck Bunny"
+    path: "/example"
+    kind: file
+    source: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"

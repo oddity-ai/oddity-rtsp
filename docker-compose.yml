@@ -1,0 +1,15 @@
+version: '3'
+
+services:
+  oddity-rtsp-server:
+    container_name: 'oddity-rtsp'
+    image: 'oddity-rtsp:latest'
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile
+    ports:
+      - "5554:5554"
+    volumes:
+      # You can connect volumes
+      - $HOME/upload:/upload
+    privileged: true
