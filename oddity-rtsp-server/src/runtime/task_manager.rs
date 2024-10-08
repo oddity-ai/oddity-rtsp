@@ -126,10 +126,10 @@ pub struct TaskContext {
 impl TaskContext {
     pub async fn wait_for_stop(&mut self) {
         select! {
-          // CANCEL SAFETY: `mpsc::Receiver::recv` is cancel safe.
-          _ = self.stop.recv() => {},
-          // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
-          _ = self.stop_all.recv() => {},
+            // CANCEL SAFETY: `mpsc::Receiver::recv` is cancel safe.
+            _ = self.stop.recv() => {},
+            // CANCEL SAFETY: `broadcast::Receiver::recv` is cancel safe.
+            _ = self.stop_all.recv() => {},
         };
     }
 }

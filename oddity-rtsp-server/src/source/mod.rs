@@ -194,42 +194,42 @@ impl Source {
 
             'read: loop {
                 select! {
-                  // CANCEL SAFETY: `StreamReader::read` uses `mpsc::UnboundedReceiver::recv`
-                  // internally which is cancel safe.
-                  packet = stream_reader.read() => {
-                    match packet {
-                      Some(Ok(packet)) => {
-                        let _ = packet_tx.send(packet.clone());
-                      },
-                      Some(Err(err)) => {
-                        tracing::error!(%path, %err, "failed to read video stream");
-                        break 'read;
-                      },
-                      None => {
-                        tracing::error!(%path, "stream reader broken unexpectedly");
-                        break 'read;
-                      },
-                    };
-                  },
-                  // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
-                  message = control_rx.recv() => {
-                    match message {
-                      Some(SourceControlMessage::StreamInfo) => {
-                        let _ = media_info_tx.send(stream_reader.info.clone());
-                      },
-                      None => {
-                        tracing::error!(%path, "source control channel broke unexpectedly");
+                    // CANCEL SAFETY: `StreamReader::read` uses `mpsc::UnboundedReceiver::recv`
+                    // internally which is cancel safe.
+                    packet = stream_reader.read() => {
+                        match packet {
+                            Some(Ok(packet)) => {
+                                let _ = packet_tx.send(packet.clone());
+                            },
+                            Some(Err(err)) => {
+                                tracing::error!(%path, %err, "failed to read video stream");
+                                break 'read;
+                            },
+                            None => {
+                                tracing::error!(%path, "stream reader broken unexpectedly");
+                                break 'read;
+                            },
+                        };
+                    },
+                    // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
+                    message = control_rx.recv() => {
+                        match message {
+                            Some(SourceControlMessage::StreamInfo) => {
+                                let _ = media_info_tx.send(stream_reader.info.clone());
+                            },
+                            None => {
+                                tracing::error!(%path, "source control channel broke unexpectedly");
+                                stream_reader.stop().await;
+                                break 'outer;
+                            },
+                        };
+                    },
+                    // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
+                    _ = task_context.wait_for_stop() => {
+                        tracing::trace!(%path, "stopping source");
                         stream_reader.stop().await;
                         break 'outer;
-                      },
-                    };
-                  },
-                  // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-                  _ = task_context.wait_for_stop() => {
-                    tracing::trace!(%path, "stopping source");
-                    stream_reader.stop().await;
-                    break 'outer;
-                  },
+                    },
                 }
             }
 

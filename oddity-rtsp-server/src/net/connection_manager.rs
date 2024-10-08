@@ -81,34 +81,34 @@ impl ConnectionManager {
     ) {
         loop {
             select! {
-              // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
-              connection_state = connection_state_rx.recv() => {
-                match connection_state {
-                  Some(ConnectionState::Disconnected(connection_id)) => {
-                    tracing::trace!(
-                      %connection_id,
-                      "connection manager: received disconnected",
-                    );
-                    connections.lock().await.remove(&connection_id);
-                  },
-                  Some(ConnectionState::Closed(connection_id)) => {
-                    tracing::trace!(
-                      %connection_id,
-                      "connection manager: received closed",
-                    );
-                    connections.lock().await.remove(&connection_id);
-                  },
-                  None => {
-                    tracing::error!("connection state channel broke unexpectedly");
+                // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
+                connection_state = connection_state_rx.recv() => {
+                    match connection_state {
+                        Some(ConnectionState::Disconnected(connection_id)) => {
+                            tracing::trace!(
+                                %connection_id,
+                                "connection manager: received disconnected",
+                            );
+                            connections.lock().await.remove(&connection_id);
+                        },
+                        Some(ConnectionState::Closed(connection_id)) => {
+                            tracing::trace!(
+                                %connection_id,
+                                "connection manager: received closed",
+                            );
+                            connections.lock().await.remove(&connection_id);
+                        },
+                        None => {
+                            tracing::error!("connection state channel broke unexpectedly");
+                            break;
+                        },
+                    }
+                },
+                // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
+                _ = task_context.wait_for_stop() => {
+                    tracing::trace!("connection manager worker stopping");
                     break;
-                  },
-                }
-              },
-              // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
-                tracing::trace!("connection manager worker stopping");
-                break;
-              },
+                },
             }
         }
     }

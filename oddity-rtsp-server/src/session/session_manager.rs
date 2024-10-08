@@ -126,24 +126,24 @@ impl SessionManager {
     ) {
         loop {
             select! {
-              // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
-              state = session_state_rx.recv() => {
-                match state {
-                  Some(SessionState::Stopped(session_id)) => {
-                    let _ = sessions.write().await.remove(&session_id);
-                    tracing::trace!(%session_id, "session manager: received stopped");
-                  },
-                  None => {
-                    tracing::error!("session state channel broke unexpectedly");
+                // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
+                state = session_state_rx.recv() => {
+                    match state {
+                        Some(SessionState::Stopped(session_id)) => {
+                            let _ = sessions.write().await.remove(&session_id);
+                            tracing::trace!(%session_id, "session manager: received stopped");
+                        },
+                        None => {
+                            tracing::error!("session state channel broke unexpectedly");
+                            break;
+                        },
+                    }
+                },
+                // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
+                _ = task_context.wait_for_stop() => {
+                    tracing::trace!("stopping session manager");
                     break;
-                  },
-                }
-              },
-              // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
-              _ = task_context.wait_for_stop() => {
-                tracing::trace!("stopping session manager");
-                break;
-              },
+                },
             }
         }
     }
