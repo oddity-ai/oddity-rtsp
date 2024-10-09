@@ -92,10 +92,14 @@ impl SourceManager {
             return Err(RegisterSourceError::AlreadyRegistered);
         }
 
-        self.describe(&path)
+        if let Err(err) = self
+            .describe(&path)
             .await
             .unwrap()
-            .map_err(RegisterSourceError::Sdp)?;
+            .map_err(RegisterSourceError::Sdp)
+        {
+            tracing::warn!(name, %path, %err, "failed to request SDP to prime cache");
+        }
         Ok(())
     }
 
