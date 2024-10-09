@@ -139,8 +139,9 @@ impl Session {
         let muxer = setup.rtp_muxer;
 
         match setup.rtp_target {
-            SessionSetupTarget::RtpUdp(_) => {
+            SessionSetupTarget::RtpUdp(target) => {
                 tracing::error!(%id, "started session with unsupported transport");
+                tracing::trace!(%id, rtp_remote = %target.rtp_remote, rtcp_remote = %target.rtcp_remote);
             }
             SessionSetupTarget::RtpTcp(target) => {
                 tracing::trace!(%id, "starting rtp over tcp (interleaved) loop");

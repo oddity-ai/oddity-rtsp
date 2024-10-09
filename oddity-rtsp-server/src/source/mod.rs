@@ -39,7 +39,7 @@ pub type SourceControlRx = mpsc::UnboundedReceiver<SourceControlMessage>;
 
 pub struct Source {
     pub name: String,
-    pub path: SourcePath,
+    // pub path: SourcePath,
     pub descriptor: MediaDescriptor,
     control_tx: SourceControlTx,
     media_info_tx: SourceMediaInfoTx,
@@ -101,7 +101,7 @@ impl Source {
 
         Ok(Self {
             name: name.to_string(),
-            path,
+            // path,
             descriptor,
             control_tx,
             media_info_tx,
