@@ -112,8 +112,8 @@ impl SessionManager {
             true
         } else {
             tracing::trace!(
-              session_id=%id,
-              "caller tried to tear down session that does not exist",
+                session_id=%id,
+                "caller tried to tear down session that does not exist",
             );
             false
         }

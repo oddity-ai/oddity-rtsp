@@ -167,8 +167,9 @@ impl AppHandler {
                     // in use before.
                     Err(RegisterSessionError::AlreadyRegistered) => {
                         tracing::error!(
-              %request,
-              "session id already present (collision)");
+                            %request,
+                            "session id already present (collision)",
+                        );
                         reply_internal_server_error(request)
                     }
                 }
@@ -181,14 +182,16 @@ impl AppHandler {
                     Some(Err(Error::RangeUnitNotSupported { value }))
                     | Some(Err(Error::RangeTimeNotSupported { value })) => {
                         tracing::error!(
-              %request, %value,
-              "client provided range header format that is not supported");
+                            %request, %value,
+                            "client provided range header format that is not supported",
+                        );
                         return reply_not_implemented(request);
                     }
                     Some(Err(error)) => {
                         tracing::error!(
-              %request, %error,
-              "failed to parse range header (bad request)");
+                            %request, %error,
+                            "failed to parse range header (bad request)",
+                        );
                         return reply_bad_request(request);
                     }
                     None => None,
@@ -219,14 +222,16 @@ impl AppHandler {
                         }
                         Some(Err(PlaySessionError::RangeNotSupported)) => {
                             tracing::error!(
-                %request,
-                "client provided range that is not supported for the resource");
+                                %request,
+                                "client provided range that is not supported for the resource",
+                            );
                             reply_header_field_not_valid(request)
                         }
                         Some(Err(PlaySessionError::ControlBroken)) => {
                             tracing::error!(
-                %request,
-                "session control channel unexpectedly broke");
+                                %request,
+                                "session control channel unexpectedly broke",
+                            );
                             reply_internal_server_error(request)
                         }
                         None => reply_session_not_found(request),
