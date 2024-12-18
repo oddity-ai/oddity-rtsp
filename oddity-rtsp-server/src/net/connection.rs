@@ -89,7 +89,6 @@ impl Connection {
         let mut outbound = codec::FramedWrite::new(write, Codec::<AsServer>::new());
 
         loop {
-            dbg!(format!("{id}"), "loop iter start"); // TODO
             select! {
                 // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
                 message = response_rx.recv() => {
@@ -114,9 +113,9 @@ impl Connection {
                     }
                 },
                 // CANCEL SAFETY: `StreamExt:next` is always cancel safe.
-                request = tokio::time::timeout(std::time::Duration::from_secs(60), inbound.next()) => {
+                request = inbound.next() => {
                     match request {
-                        Ok(Some(Ok(request))) => {
+                        Some(Ok(request)) => {
                             match request {
                                 RequestMaybeInterleaved::Message(request) => {
                                     let response = handler.handle(&request, &response_tx).await;
@@ -139,34 +138,29 @@ impl Connection {
                                 },
                             }
                         },
-                        Ok(None) => {
+                        None => {
                             disconnected = true;
                             tracing::info!(%id, %addr, "connection: client disconnected");
                             break;
                         },
-                        Ok(Some(Err(Error::Io(err)))) if err.kind() == ErrorKind::ConnectionReset => {
+                        Some(Err(Error::Io(err))) if err.kind() == ErrorKind::ConnectionReset => {
                             disconnected = true;
                             tracing::info!(%id, %addr, "connection: client disconnected (reset)");
                             break;
                         },
-                        Ok(Some(Err(err))) => {
+                        Some(Err(err)) => {
                             tracing::error!(%err, %id, %addr, "connection: failed to read request");
                             break;
                         },
-                        Err(_) => {
-                            tracing::info!(%id, %addr, "connection: timed out reading request");
-                            break;
-                        }
                     }
                 },
-                // TODO: We seem to have an issue here since this point is never
-                // hit (the one above should work for ingress timeout already
-                // but didn't work either). We do see loop iter start, but no
-                // loop exit so it seems to be stuck somewhere? Are we blocking
-                // somehwere?
-                // TODO: Remove later.
+                // Timeout mechanism. The RFC mandates the timeout be applied to
+                // the maximum duration between commands. We are using
+                // interleaved TCP so I opted to apply the timeout
+                // bidirectionally. See RFC 2326 Section 12.37.
                 _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
-                    dbg!("sleep hit"); // TODO
+                    tracing::info!(%id, %addr, "connection: timed out reading request");
+                    break;
                 },
                 // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
                 _ = task_context.wait_for_stop() => {
@@ -174,9 +168,7 @@ impl Connection {
                     break;
                 },
             };
-            dbg!(format!("{id}"), "loop iter end"); // TODO
         }
-        dbg!(format!("{id}"), "loop exit"); // TODO
 
         if disconnected {
             // Client disconnected.
