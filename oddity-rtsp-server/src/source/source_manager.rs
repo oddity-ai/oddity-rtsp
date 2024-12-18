@@ -21,7 +21,7 @@ use crate::source::{
 type SourceShared = Arc<Mutex<Source>>;
 type SourceMap = Arc<RwLock<HashMap<SourcePath, SourceShared>>>;
 
-type SourceDescriptionsCache = Arc<RwLock<HashMap<SourcePath, Sdp>>>;
+type SourceDescriptionsCache = Arc<RwLock<HashMap<SourcePath, (std::time::Instant, Sdp)>>>;
 
 pub struct SourceManager {
     sources: SourceMap,
@@ -104,13 +104,14 @@ impl SourceManager {
     }
 
     pub async fn describe(&self, path: &SourcePathRef) -> Option<Result<Sdp, SdpError>> {
+        self.reap_cache().await;
         let cached_description = self
             .source_descriptions_cache
             .read()
             .await
             .get(path)
             .cloned();
-        if let Some(description) = cached_description {
+        if let Some((_, description)) = cached_description {
             tracing::trace!(%path, "pulled SDP from cache");
             Some(Ok(description))
         } else {
@@ -120,10 +121,10 @@ impl SourceManager {
                 let source_descriptor = source.lock().await.descriptor.clone();
                 let description = sdp::create(&source_name, &source_descriptor).await;
                 if let Ok(description) = description.as_ref() {
-                    self.source_descriptions_cache
-                        .write()
-                        .await
-                        .insert(path.into(), description.clone());
+                    self.source_descriptions_cache.write().await.insert(
+                        path.into(),
+                        (std::time::Instant::now(), description.clone()),
+                    );
                     tracing::trace!(%path, "cached SDP");
                 }
                 Some(description)
@@ -172,6 +173,21 @@ impl SourceManager {
                 },
             }
         }
+    }
+
+    async fn reap_cache(&self) {
+        let now = std::time::Instant::now();
+        self.source_descriptions_cache
+            .write()
+            .await
+            .retain(|path, (timestamp, _)| {
+                let should_reap =
+                    now.duration_since(*timestamp) > std::time::Duration::from_secs(120);
+                if should_reap {
+                    tracing::trace!(%path, "reaping cached SDP");
+                }
+                !should_reap
+            });
     }
 }
 
