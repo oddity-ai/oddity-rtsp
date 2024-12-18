@@ -22,8 +22,22 @@ impl fmt::Display for MediaDescriptor {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             MediaDescriptor::File(path) => write!(f, "file: {}", path.display()),
-            MediaDescriptor::Stream(url) => write!(f, "stream: {}", url),
+            MediaDescriptor::Stream(url) => {
+                write!(f, "stream: {}", {
+                    let mut url_safe = url.clone();
+                    let _ = url_safe.set_password(None);
+                    url_safe
+                })
+            }
         }
+    }
+}
+
+impl fmt::Debug for MediaDescriptor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // Delegate to default formatting. This also hides the password to
+        // prevent passwords from leaking in logs.
+        write!(f, "{self}")
     }
 }
 
@@ -50,7 +64,7 @@ impl MediaInfo {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct StreamState {
     pub rtp_seq: u16,
     pub rtp_timestamp: u32,

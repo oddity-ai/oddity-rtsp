@@ -20,7 +20,7 @@ pub struct Server {
     pub port: u16,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct Item {
     pub name: String,
     pub path: String,
@@ -35,6 +35,20 @@ impl Item {
             MediaKind::Stream => MediaDescriptor::Stream(self.source.parse()?),
         })
     }
+
+    fn source_safe_display(&self) -> String {
+        if matches!(self.kind, MediaKind::Stream) {
+            video_rs::Url::parse(&self.source)
+                .map(|url| {
+                    let mut url_safe = url.clone();
+                    let _ = url_safe.set_password(None);
+                    url_safe.to_string()
+                })
+                .unwrap_or_else(|_| "<invalid url>".to_string())
+        } else {
+            self.source.to_string()
+        }
+    }
 }
 
 impl fmt::Display for Item {
@@ -42,7 +56,23 @@ impl fmt::Display for Item {
         write!(
             f,
             "{} ({}): {} ({})",
-            self.name, self.path, self.source, self.kind,
+            self.name,
+            self.path,
+            self.source_safe_display(),
+            self.kind,
+        )
+    }
+}
+
+impl std::fmt::Debug for Item {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{{ name: {:?}, path: {:?}, kind: {:?}, source: {:?} }}",
+            self.name,
+            self.path,
+            self.kind,
+            self.source_safe_display(),
         )
     }
 }
