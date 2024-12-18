@@ -2,15 +2,14 @@ name: ci
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-
   test:
     runs-on: ubuntu-latest
     container: jrottenberg/ffmpeg:6-ubuntu
@@ -21,8 +20,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install -y --no-install-recommends clang curl pkg-config
+          DEBIAN_FRONTEND=noninteractive apt update
+          DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends clang curl pkg-config ca-certificates
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
@@ -42,8 +41,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          apt update
-          apt install -y --no-install-recommends clang curl pkg-config
+          DEBIAN_FRONTEND=noninteractive apt update
+          DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends clang curl pkg-config ca-certificates
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
