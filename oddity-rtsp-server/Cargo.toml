@@ -1,5 +1,6 @@
 [package]
 name = "oddity-rtsp-server"
+description = "Rust RTSP server built on top of ffmpeg."
 version = "0.1.0"
 authors = ["Oddity.ai Developers <hello@oddity.ai>"]
 license = "MIT OR Apache-2.0"
@@ -20,4 +21,3 @@ tokio-util = { version = "0.7.1", default-features = false, features = [
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 video-rs = { workspace = true }
-

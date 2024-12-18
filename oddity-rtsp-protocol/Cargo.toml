@@ -1,5 +1,6 @@
 [package]
 name = "oddity-rtsp-protocol"
+description = "RTSP protocol implementation for oddity-rtsp-server."
 version = "0.1.0"
 authors = ["Oddity.ai Developers <hello@oddity.ai>"]
 license = "MIT OR Apache-2.0"
