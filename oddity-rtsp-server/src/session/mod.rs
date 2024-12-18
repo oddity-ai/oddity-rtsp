@@ -17,6 +17,7 @@ use video_rs as video;
 
 use crate::media;
 use crate::media::video::rtp_muxer;
+use crate::media::StreamState;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::runtime::Runtime;
 use crate::session::setup::{SessionSetup, SessionSetupTarget};
@@ -171,7 +172,7 @@ impl Session {
         mut task_context: TaskContext,
     ) {
         let mut state = SessionMediaState::Ready;
-        let mut need_stream_state = false;
+        let mut stream_state = StreamState::default();
 
         let (mut source_reset_rx, mut source_packet_rx) = source_delegate.into_parts();
 
@@ -220,18 +221,11 @@ impl Session {
                             let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
                             muxer = muxed;
 
-                            if need_stream_state {
-                                tracing::trace!(%id, "fetching stream state");
-                                let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
-                                let stream_state = media::StreamState {
-                                    rtp_seq,
-                                    rtp_timestamp,
-                                };
-                                tracing::trace!(%id, rtp_seq, rtp_timestamp, "fetched stream state");
-                                let _ = stream_state_tx.send(stream_state);
-
-                                need_stream_state = false;
-                            }
+                            let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
+                            stream_state = media::StreamState {
+                                rtp_seq,
+                                rtp_timestamp,
+                            };
 
                             let packet = match packet {
                                 Ok(packet) => packet,
@@ -279,8 +273,8 @@ impl Session {
                             tracing::info!(%id, "session now playing");
                         },
                         Some(SessionControlMessage::StreamState) => {
-                            need_stream_state = true;
-                            tracing::trace!(%id, "set need stream state flag");
+                            let _ = stream_state_tx.send(stream_state.clone());
+                            tracing::trace!(%id, "dispatched stream state over control channel");
                         },
                         None => {
                             tracing::error!(%id, "session control channel broke unexpectedly");
