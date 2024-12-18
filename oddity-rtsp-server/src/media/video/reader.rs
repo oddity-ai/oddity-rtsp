@@ -52,8 +52,12 @@ impl StreamReader {
         if let Ok(()) = self.stop_tx.send(()) {
             if let Some(handle) = self.handle.take() {
                 tracing::trace!("sending stop signal to stream reader");
-                let _ = task::spawn_blocking(|| handle.join()).await;
-                tracing::trace!("stopped stream reader");
+                // We do not wait for the reader to actually stop since it may
+                // be blocking.
+                task::spawn(task::spawn_blocking(|| {
+                    let _ = handle.join();
+                    tracing::trace!("stopped stream reader");
+                }));
             }
         }
     }
@@ -148,10 +152,10 @@ impl Times {
 
     pub fn update(&mut self, packet: &mut video::Packet) {
         if packet.duration().has_value() {
-            packet.set_dts(&self.next_dts);
-            packet.set_pts(&self.next_pts);
-            self.next_dts = self.next_dts.aligned_with(&packet.duration()).add();
-            self.next_pts = self.next_pts.aligned_with(&packet.duration()).add();
+            packet.set_dts(self.next_dts);
+            packet.set_pts(self.next_pts);
+            self.next_dts = self.next_dts.aligned_with(packet.duration()).add();
+            self.next_pts = self.next_pts.aligned_with(packet.duration()).add();
         }
     }
 }
