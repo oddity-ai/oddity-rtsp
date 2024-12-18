@@ -141,8 +141,8 @@ impl Source {
             Ok(stream_reader) => Some(stream_reader),
             Err(err) => {
                 tracing::error!(
-                  %err, %descriptor,
-                  "failed to start stream",
+                    %err, %descriptor,
+                    "failed to start stream",
                 );
                 None
             }

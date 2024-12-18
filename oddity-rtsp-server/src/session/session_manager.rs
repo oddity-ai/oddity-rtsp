@@ -96,8 +96,8 @@ impl SessionManager {
             Some(session.lock().await.play(range).await)
         } else {
             tracing::trace!(
-              session_id=%id,
-              "caller tried to play session that does not exist",
+                session_id=%id,
+                "caller tried to play session that does not exist",
             );
             None
         }
