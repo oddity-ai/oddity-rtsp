@@ -15,4 +15,3 @@ tokio-util = { version = "0.7", default-features = false, features = [
 [features]
 default = ["tokio-codec"]
 tokio-codec = ["tokio-util"]
-

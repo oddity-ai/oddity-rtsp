@@ -7,3 +7,7 @@ oddity-rtsp-protocol = { path = "oddity-rtsp-protocol" }
 oddity-rtsp-server = { path = "oddity-rtsp-server" }
 oddity-sdp-protocol = { path = "oddity-sdp-protocol" }
 video-rs = "^0.10.3"
+
+[profile.release]
+panic = "abort"
+strip = "symbols"
