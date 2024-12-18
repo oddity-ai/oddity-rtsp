@@ -12,7 +12,7 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
-    container: jrottenberg/ffmpeg:6-ubuntu
+    container: jrottenberg/ffmpeg:7-ubuntu
 
     steps:
       - name: Checkout
@@ -33,7 +33,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
-    container: jrottenberg/ffmpeg:6-ubuntu
+    container: jrottenberg/ffmpeg:7-ubuntu
 
     steps:
       - name: Checkout
