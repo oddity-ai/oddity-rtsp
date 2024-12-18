@@ -14,9 +14,7 @@
 Download, compile (with Cargo) and run the RTSP server with a simple configuration file:
 
 ```sh
-git clone git@github.com:oddity-ai/oddity-rtsp.git
-cd oddity-rtsp
-cd oddity-rtsp-server
+cargo install oddity-rtsp-server
 echo 'server:
   host: 0.0.0.0
   port: 5554
@@ -25,7 +23,7 @@ media:
     path: "/example"
     kind: file
     source: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"' >> config.yaml
-LOG=oddity_rtsp_server=info cargo run --release -- config.yaml
+LOG=oddity_rtsp_server=info oddity-rtsp-server
 ```
 
 Play the file using `ffmpeg`:
