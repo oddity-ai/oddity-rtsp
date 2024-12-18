@@ -21,15 +21,12 @@ jobs:
       - name: Install dependencies
         run: |
           DEBIAN_FRONTEND=noninteractive apt update
-          DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends clang curl pkg-config ca-certificates
+          DEBIAN_FRONTEND=noninteractive apt install -y --no-install-recommends clang curl pkg-config ca-certificates build-essential
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-
-      - name: Build Essentials check
-        run : apt search build-essential
 
       - name: Test
         run: cargo test --workspace --all-features --release
