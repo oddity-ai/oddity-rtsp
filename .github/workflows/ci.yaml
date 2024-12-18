@@ -28,6 +28,9 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Build Essentials check
+        run : apt search build-essential
+
       - name: Test
         run: cargo test --workspace --all-features --release
 
