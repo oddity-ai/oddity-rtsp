@@ -22,7 +22,7 @@ media:
   - name: "Big Buck Bunny"
     path: "/example"
     kind: file
-    source: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"' >> config.yaml
+    source: "https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"' >> default.yaml
 LOG=oddity_rtsp_server=info oddity-rtsp-server
 ```
 
