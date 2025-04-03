@@ -61,9 +61,12 @@ impl Server {
             select! {
                 // CANCEL SAFETY: `tokio::net::TcpListener::accept` is cancel safe.
                 incoming = listener.accept() => {
+                    use std::os::fd::AsFd; // TODO: Remove
+
                     match incoming {
                         Ok((incoming, peer_addr)) => {
                             tracing::trace!(%peer_addr, "accepted client");
+                            tracing::debug!(fd = ?incoming.as_fd(), "incoming connection"); // TODO: Remove
                             connection_manager.spawn(incoming).await;
                         },
                         Err(err) => {
