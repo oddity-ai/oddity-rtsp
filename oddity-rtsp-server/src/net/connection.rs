@@ -44,6 +44,8 @@ impl Connection {
         let (sender_tx, sender_rx) = mpsc::unbounded_channel();
 
         tracing::trace!(%id, "starting connection");
+        use std::os::fd::AsFd; // TODO
+        tracing::trace!(fd = ?inner.as_fd(), "starting connection with fd"); // TODO: Remove
         let worker = runtime
             .task()
             .spawn(move |task_context| {
@@ -88,24 +90,31 @@ impl Connection {
         let mut inbound = codec::FramedRead::new(read, Codec::<AsServer>::new());
         let mut outbound = codec::FramedWrite::new(write, Codec::<AsServer>::new());
 
+        tracing::trace!(%id, "framed connection"); // TODO
+
         loop {
             select! {
                 // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
                 message = response_rx.recv() => {
                     match message {
                         Some(message) => {
+                            tracing::trace!(%id, "outbound.send pre"); // TODO
+
                             match outbound.send(message).await {
                                 Ok(()) => {},
                                 Err(Error::Io(err)) if err.kind() == ErrorKind::ConnectionReset => {
                                     disconnected = true;
+                                    tracing::trace!(%id, "outbound.send post"); // TODO
                                     tracing::info!(%id, %addr, "connection: client disconnected (reset)");
                                     break;
                                 },
                                 Err(err) => {
+                                    tracing::trace!(%id, "outbound.send post"); // TODO
                                     tracing::error!(%err, %id, %addr, "connection: failed to send message");
                                     break;
                                 }
                             }
+                            tracing::trace!(%id, "outbound.send post"); // TODO
                         },
                         None => {
                             break;
@@ -120,18 +129,23 @@ impl Connection {
                                 RequestMaybeInterleaved::Message(request) => {
                                     let response = handler.handle(&request, &response_tx).await;
                                     let response = ResponseMaybeInterleaved::Message(response);
+
+                                    tracing::trace!(%id, "outbound.send2 pre"); // TODO
                                     match outbound.send(response).await {
                                         Ok(()) => {},
                                         Err(Error::Io(err)) if err.kind() == ErrorKind::ConnectionReset => {
                                             disconnected = true;
+                                            tracing::trace!(%id, "outbound.send2 post"); // TODO
                                             tracing::info!(%id, %addr, "connection: client disconnected (reset)");
                                             break;
                                         },
                                         Err(err) => {
+                                            tracing::trace!(%id, "outbound.send2 post"); // TODO
                                             tracing::error!(%err, %id, %addr, "connection: failed to send response");
                                             break;
                                         },
                                     }
+                                    tracing::trace!(%id, "outbound.send2 post"); // TODO
                                 },
                                 RequestMaybeInterleaved::Interleaved { channel, .. } => {
                                     tracing::debug!(%id, %addr, %channel, "ignored request with interleaved data");
