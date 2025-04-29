@@ -93,9 +93,13 @@ impl Connection {
         tracing::trace!(%id, "framed connection"); // TODO
 
         loop {
+            tracing::trace!(%id, "loop enter"); // TODO
+
             select! {
                 // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
                 message = response_rx.recv() => {
+                    tracing::trace!(%id, "response_rx.recv()"); // TODO
+
                     match message {
                         Some(message) => {
                             tracing::trace!(%id, "outbound.send pre"); // TODO
@@ -123,11 +127,15 @@ impl Connection {
                 },
                 // CANCEL SAFETY: `StreamExt:next` is always cancel safe.
                 request = inbound.next() => {
+                    tracing::trace!(%id, "inbound.next()"); // TODO
+
                     match request {
                         Some(Ok(request)) => {
                             match request {
                                 RequestMaybeInterleaved::Message(request) => {
+                                    tracing::trace!(%id, "handler.handle pre"); // TODO
                                     let response = handler.handle(&request, &response_tx).await;
+                                    tracing::trace!(%id, "handler.handle post"); // TODO
                                     let response = ResponseMaybeInterleaved::Message(response);
 
                                     tracing::trace!(%id, "outbound.send2 pre"); // TODO
@@ -173,11 +181,15 @@ impl Connection {
                 // interleaved TCP so I opted to apply the timeout
                 // bidirectionally. See RFC 2326 Section 12.37.
                 _ = tokio::time::sleep(std::time::Duration::from_secs(60)) => {
+                    tracing::trace!(%id, "tokio::time::sleep(std::time::Duration::from_secs(60))"); // TODO
+
                     tracing::info!(%id, %addr, "connection: timed out reading request");
                     break;
                 },
                 // CANCEL SAFETY: `TaskContext::wait_for_stop` is cancel safe.
                 _ = task_context.wait_for_stop() => {
+                    tracing::trace!(%id, "wait_for_stop"); // TODO
+
                     tracing::trace!(%id, %addr, "connection worker stopping");
                     break;
                 },
