@@ -25,7 +25,12 @@ impl AppHandler {
         Self { context }
     }
 
-    pub async fn handle(&self, request: &Request, responder: &ResponseSenderTx) -> Response {
+    pub async fn handle(
+        &self,
+        request: &Request,
+        responder: &ResponseSenderTx,
+        id: crate::net::connection::ConnectionId, // TODO: Temporary
+    ) -> Response {
         tracing::trace!(%request, "handling request");
 
         // Check the Require header and make sure all requested options are
@@ -84,7 +89,7 @@ impl AppHandler {
             }
             /* Stateful */
             Method::Setup => {
-                tracing::trace!("handling SETUP request");
+                tracing::trace!(%id, "handling SETUP request");
                 if request.session().is_some() {
                     // RFC specification allows negatively responding to SETUP request with Session
                     // IDs by responding with 459 Aggregate Operation Not Allowed. By handling this
@@ -101,7 +106,7 @@ impl AppHandler {
                         return reply_unsupported_transport(request);
                     }
                 };
-                tracing::trace!(path = request.path(), ?transport, "resolved transport");
+                tracing::trace!(%id, path = request.path(), ?transport, "resolved transport");
 
                 let mut source_delegate = match self
                     .use_context()
@@ -115,9 +120,9 @@ impl AppHandler {
                         return reply_not_found(request);
                     }
                 };
-                tracing::trace!(path = request.path(), "acquired source delegate");
+                tracing::trace!(%id, path = request.path(), "acquired source delegate");
 
-                let media_info = match source_delegate.query_media_info().await {
+                let media_info = match source_delegate.media_info().await {
                     Some(media_info) => media_info,
                     None => {
                         tracing::trace!(
@@ -127,6 +132,7 @@ impl AppHandler {
                         return reply_internal_server_error(request);
                     }
                 };
+                tracing::trace!(%id, "query_media_info post"); // TODO
 
                 let session_setup = match SessionSetup::from_rtsp_candidate_transports(
                     transport,
@@ -148,7 +154,7 @@ impl AppHandler {
                         return reply_internal_server_error(request);
                     }
                 };
-                tracing::trace!(path = request.path(), "setup session");
+                tracing::trace!(%id, path = request.path(), "setup session");
 
                 let transport = session_setup.rtsp_transport.clone();
                 match self
@@ -160,13 +166,14 @@ impl AppHandler {
                 {
                     // Session was successfully registered!
                     Ok(session_id) => {
-                        tracing::trace!(path=request.path(), %session_id, "registered session");
+                        tracing::trace!(%id, path=request.path(), %session_id, "registered session");
                         reply_to_setup(request, &session_id, &transport)
                     }
                     // In the highly unlikely case that the randomly generated session was already
                     // in use before.
                     Err(RegisterSessionError::AlreadyRegistered) => {
                         tracing::error!(
+                            %id,
                             %request,
                             "session id already present (collision)",
                         );

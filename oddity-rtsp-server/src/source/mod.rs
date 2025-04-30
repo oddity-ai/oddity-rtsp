@@ -1,15 +1,18 @@
 pub mod source_manager;
 
+use std::sync::Arc;
 use std::time;
 
 use tokio::select;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
+use tokio::sync::Mutex;
 use tokio::time::timeout;
 
 use video_rs as video;
 
 use crate::media::video::reader::StreamReader;
+use crate::media::MediaInfo;
 use crate::media::{self, MediaDescriptor};
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::runtime::Runtime;
@@ -21,30 +24,19 @@ pub enum SourceState {
 pub type SourceStateTx = mpsc::UnboundedSender<SourceState>;
 pub type SourceStateRx = mpsc::UnboundedReceiver<SourceState>;
 
-pub type SourceMediaInfoTx = broadcast::Sender<media::MediaInfo>;
-pub type SourceMediaInfoRx = broadcast::Receiver<media::MediaInfo>;
-
 pub type SourceResetTx = broadcast::Sender<media::MediaInfo>;
 pub type SourceResetRx = broadcast::Receiver<media::MediaInfo>;
 
 pub type SourcePacketTx = broadcast::Sender<media::Packet>;
 pub type SourcePacketRx = broadcast::Receiver<media::Packet>;
 
-pub enum SourceControlMessage {
-    StreamInfo,
-}
-
-pub type SourceControlTx = mpsc::UnboundedSender<SourceControlMessage>;
-pub type SourceControlRx = mpsc::UnboundedReceiver<SourceControlMessage>;
-
 pub struct Source {
     pub name: String,
     // pub path: SourcePath,
     pub descriptor: MediaDescriptor,
-    control_tx: SourceControlTx,
-    media_info_tx: SourceMediaInfoTx,
     reset_tx: SourceResetTx,
     packet_tx: SourcePacketTx,
+    media_info: Arc<Mutex<Option<MediaInfo>>>,
     worker: Task,
 }
 
@@ -69,10 +61,9 @@ impl Source {
     ) -> Result<Self, video::Error> {
         let path = normalize_path(path);
 
-        let (control_tx, control_rx) = mpsc::unbounded_channel();
-        let (media_info_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
         let (reset_tx, _) = broadcast::channel(Self::MAX_QUEUED_INFO);
         let (packet_tx, _) = broadcast::channel(Self::MAX_QUEUED_PACKETS);
+        let media_info = Arc::new(Mutex::new(None));
 
         tracing::trace!(name, %path, "starting source");
         let worker = runtime
@@ -80,18 +71,17 @@ impl Source {
             .spawn({
                 let path = path.clone();
                 let descriptor = descriptor.clone();
-                let media_info_tx = media_info_tx.clone();
                 let reset_tx = reset_tx.clone();
                 let packet_tx = packet_tx.clone();
+                let media_info = Arc::clone(&media_info);
                 move |task_context| {
                     Self::run(
                         path,
                         descriptor,
-                        control_rx,
                         state_tx,
-                        media_info_tx,
                         reset_tx,
                         packet_tx,
+                        media_info,
                         task_context,
                     )
                 }
@@ -103,10 +93,9 @@ impl Source {
             name: name.to_string(),
             // path,
             descriptor,
-            control_tx,
-            media_info_tx,
             reset_tx,
             packet_tx,
+            media_info,
             worker,
         })
     }
@@ -119,10 +108,9 @@ impl Source {
 
     pub fn delegate(&mut self) -> SourceDelegate {
         SourceDelegate {
-            control_tx: self.control_tx.clone(),
-            media_info_rx: self.media_info_tx.subscribe(),
             reset_rx: self.reset_tx.subscribe(),
             packet_rx: self.packet_tx.subscribe(),
+            media_info: Arc::clone(&self.media_info),
         }
     }
 
@@ -130,15 +118,17 @@ impl Source {
     async fn run(
         path: SourcePath,
         descriptor: MediaDescriptor,
-        mut control_rx: SourceControlRx,
         state_tx: SourceStateTx,
-        media_info_tx: SourceMediaInfoTx,
         reset_tx: SourceResetTx,
         packet_tx: SourcePacketTx,
+        media_info: Arc<Mutex<Option<MediaInfo>>>,
         mut task_context: TaskContext,
     ) {
         let mut outer_stream_reader = match StreamReader::new(&descriptor).await {
-            Ok(stream_reader) => Some(stream_reader),
+            Ok(stream_reader) => {
+                _ = media_info.lock().await.insert(stream_reader.info.clone());
+                Some(stream_reader)
+            }
             Err(err) => {
                 tracing::error!(
                     %err, %descriptor,
@@ -191,6 +181,7 @@ impl Source {
                     }
                 }
             };
+            _ = media_info.lock().await.insert(stream_reader.info.clone());
 
             'read: loop {
                 select! {
@@ -208,19 +199,6 @@ impl Source {
                             None => {
                                 tracing::error!(%path, "stream reader broken unexpectedly");
                                 break 'read;
-                            },
-                        };
-                    },
-                    // CANCEL SAFETY: `mpsc::UnboundedReceiver::recv` is cancel safe.
-                    message = control_rx.recv() => {
-                        match message {
-                            Some(SourceControlMessage::StreamInfo) => {
-                                let _ = media_info_tx.send(stream_reader.info.clone());
-                            },
-                            None => {
-                                tracing::error!(%path, "source control channel broke unexpectedly");
-                                stream_reader.stop().await;
-                                break 'outer;
                             },
                         };
                     },
@@ -247,19 +225,26 @@ impl Source {
 }
 
 pub struct SourceDelegate {
-    control_tx: SourceControlTx,
-    media_info_rx: SourceMediaInfoRx,
     reset_rx: SourceResetRx,
     packet_rx: SourcePacketRx,
+    media_info: Arc<Mutex<Option<MediaInfo>>>,
 }
 
 impl SourceDelegate {
-    pub async fn query_media_info(&mut self) -> Option<media::MediaInfo> {
-        if let Ok(()) = self.control_tx.send(SourceControlMessage::StreamInfo) {
-            self.media_info_rx.recv().await.ok()
-        } else {
-            None
+    pub async fn media_info(&mut self) -> Option<media::MediaInfo> {
+        const MAX_TRIES: usize = 4;
+        const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+        for try_count in 0..MAX_TRIES {
+            if try_count > 0 {
+                tokio::time::sleep(TIMEOUT).await;
+                tracing::trace!(try_count = %try_count + 1, max_tries = MAX_TRIES, "trying again for media info");
+            }
+            if let Some(media_info) = self.media_info.lock().await.as_ref() {
+                return Some(media_info.clone());
+            }
         }
+        None
     }
 
     pub fn into_parts(self) -> (SourceResetRx, SourcePacketRx) {

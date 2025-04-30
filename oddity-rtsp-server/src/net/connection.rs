@@ -134,7 +134,7 @@ impl Connection {
                             match request {
                                 RequestMaybeInterleaved::Message(request) => {
                                     tracing::trace!(%id, "handler.handle pre"); // TODO
-                                    let response = handler.handle(&request, &response_tx).await;
+                                    let response = handler.handle(&request, &response_tx, id).await;
                                     tracing::trace!(%id, "handler.handle post"); // TODO
                                     let response = ResponseMaybeInterleaved::Message(response);
 
