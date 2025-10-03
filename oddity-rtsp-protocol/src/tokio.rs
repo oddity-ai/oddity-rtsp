@@ -60,7 +60,7 @@ impl<T: Target> Decoder for Codec<T> {
             State::ParseMessage => match self.parser.parse(src)? {
                 Status::Done => {
                     self.state = State::Init;
-                    let parser = std::mem::replace(&mut self.parser, Parser::<T::Inbound>::new());
+                    let parser = std::mem::take(&mut self.parser);
                     Ok(Some(
                         parser
                             .into_message()
