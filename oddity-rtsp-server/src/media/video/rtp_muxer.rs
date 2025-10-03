@@ -16,6 +16,7 @@ pub struct RtpMuxer {
     inner: BlockingRtpMuxer,
     sps_packet_annex_b: Option<Vec<u8>>,
     pps_packet_annex_b: Option<Vec<u8>>,
+    first_packet_sent: bool,
 }
 
 impl RtpMuxer {
@@ -44,6 +45,7 @@ impl RtpMuxer {
             inner: blocking_muxer,
             sps_packet_annex_b: sps_packet,
             pps_packet_annex_b: pps_packet,
+            first_packet_sent: false,
         })
     }
 
@@ -57,33 +59,31 @@ impl RtpMuxer {
         packet: video::Packet,
     ) -> (RtpMuxer, Result<Vec<video::rtp::RtpBuf>>) {
         task::spawn_blocking(move || {
-            if packet.is_key() {
+            let packet = if (packet.is_key() || !self.first_packet_sent)
+                && (self.sps_packet_annex_b.is_some() || self.pps_packet_annex_b.is_some())
+            {
+                let old_dts = packet.dts();
+                let old_pts = packet.pts();
+                let (old_packet, time_base) = packet.into_inner_parts();
+                let mut new_packet_data = Vec::new();
                 if let Some(sps_packet_data) = &self.sps_packet_annex_b {
-                    dbg!("sps"); // TODO
-                    let mut sps_packet = video_rs::Packet::new(
-                        video_rs::ffmpeg::Packet::copy(sps_packet_data),
-                        video_rs::ffmpeg::ffi::AV_TIME_BASE_Q.into(),
-                    );
-                    sps_packet.set_dts(packet.dts());
-                    sps_packet.set_pts(packet.pts());
-                    if let Err(err) = self.inner.mux(sps_packet) {
-                        return (self, Err(err));
-                    }
+                    new_packet_data.extend_from_slice(sps_packet_data);
                 }
                 if let Some(pps_packet_data) = &self.pps_packet_annex_b {
-                    dbg!("pps"); // TODO
-                    let mut pps_packet = video_rs::Packet::new(
-                        video_rs::ffmpeg::Packet::copy(pps_packet_data),
-                        video_rs::ffmpeg::ffi::AV_TIME_BASE_Q.into(),
-                    );
-                    pps_packet.set_dts(packet.dts());
-                    pps_packet.set_pts(packet.pts());
-                    if let Err(err) = self.inner.mux(pps_packet) {
-                        return (self, Err(err));
-                    }
+                    new_packet_data.extend_from_slice(pps_packet_data);
                 }
-            }
+                new_packet_data.extend_from_slice(&[0, 0, 0, 1]);
+                new_packet_data.extend_from_slice(&old_packet.data().unwrap()[4..]);
+                let mut new_packet =
+                    video::Packet::new(video::ffmpeg::Packet::copy(&new_packet_data), time_base);
+                new_packet.set_dts(old_dts);
+                new_packet.set_pts(old_pts);
+                new_packet
+            } else {
+                packet
+            };
             let out = self.inner.mux(packet);
+            self.first_packet_sent = true;
             (self, out)
         })
         .await
