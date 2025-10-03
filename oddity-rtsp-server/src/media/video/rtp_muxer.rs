@@ -27,12 +27,12 @@ impl RtpMuxer {
         let (sps_packet, pps_packet) = if !parameter_sets.is_empty() {
             let (sps, ppss) = parameter_sets.remove(0)?;
 
-            let mut sps_packet = vec![0, 0, 0, 1]; // annex b start code
+            let mut sps_packet = (sps.len() as u32).to_be_bytes().to_vec(); // AVCC start code
             sps_packet.extend_from_slice(sps);
 
             let mut pps_packet = Vec::new();
             for pps in ppss {
-                pps_packet.extend_from_slice(&[0, 0, 0, 1]);
+                pps_packet.extend_from_slice(&(pps.len() as u32).to_be_bytes());
                 pps_packet.extend_from_slice(pps);
             }
 
@@ -72,8 +72,7 @@ impl RtpMuxer {
                 if let Some(pps_packet_data) = &self.pps_packet_annex_b {
                     new_packet_data.extend_from_slice(pps_packet_data);
                 }
-                new_packet_data.extend_from_slice(&[0, 0, 0, 1]);
-                new_packet_data.extend_from_slice(&old_packet.data().unwrap()[4..]);
+                new_packet_data.extend_from_slice(old_packet.data().unwrap());
                 let mut new_packet =
                     video::Packet::new(video::ffmpeg::Packet::copy(&new_packet_data), time_base);
                 new_packet.set_dts(old_dts);
