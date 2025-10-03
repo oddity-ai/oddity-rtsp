@@ -5,14 +5,14 @@ use std::net::SocketAddr;
 use oddity_rtsp_protocol as rtsp;
 use video_rs as video;
 
-use crate::media::video::rtp_muxer;
+use crate::media::video::rtp_muxer::{make_rtp_muxer_builder, RtpMuxer};
 use crate::media::MediaInfo;
 use crate::net::connection::ResponseSenderTx;
 use crate::session::transport;
 
 pub struct SessionSetup {
     pub rtsp_transport: rtsp::Transport,
-    pub rtp_muxer: video::rtp::RtpMuxer,
+    pub rtp_muxer: RtpMuxer,
     pub rtp_target: SessionSetupTarget,
 }
 
@@ -29,7 +29,7 @@ impl SessionSetup {
         tracing::trace!(%transport, "selected transport");
 
         tracing::trace!("initializing muxer");
-        rtp_muxer::make_rtp_muxer_builder()
+        make_rtp_muxer_builder()
             .await
             .map_err(SessionSetupError::Media)
             .and_then(|mut rtp_muxer_builder| {
@@ -47,7 +47,8 @@ impl SessionSetup {
                         .map_err(SessionSetupError::Media)?;
                 }
 
-                let rtp_muxer = rtp_muxer_builder.build();
+                let rtp_muxer =
+                    RtpMuxer::from_builder(rtp_muxer_builder).map_err(SessionSetupError::Media)?;
                 Ok(Self {
                     rtsp_transport: resolved_transport,
                     rtp_muxer,

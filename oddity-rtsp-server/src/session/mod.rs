@@ -16,7 +16,7 @@ use oddity_rtsp_protocol as rtsp;
 use video_rs as video;
 
 use crate::media;
-use crate::media::video::rtp_muxer;
+use crate::media::video::rtp_muxer::{make_rtp_muxer_builder, RtpMuxer};
 use crate::media::StreamState;
 use crate::runtime::task_manager::{Task, TaskContext};
 use crate::runtime::Runtime;
@@ -165,7 +165,7 @@ impl Session {
     async fn run_tcp_interleaved(
         id: SessionId,
         source_delegate: SourceDelegate,
-        mut muxer: video::rtp::RtpMuxer,
+        mut muxer: RtpMuxer,
         target: setup::SendInterleaved,
         mut control_rx: SessionControlRx,
         stream_state_tx: SessionStreamStateTx,
@@ -185,7 +185,7 @@ impl Session {
                     match reset {
                         Ok(media_info) => {
                             tracing::trace!("reinitializing muxer");
-                            let new_muxer = rtp_muxer::make_rtp_muxer_builder()
+                            let new_muxer = make_rtp_muxer_builder()
                                 .await
                                 .and_then(|mut rtp_muxer_builder| {
                                     for stream_info in media_info.streams {
@@ -197,7 +197,7 @@ impl Session {
                                     }
                                     Ok(rtp_muxer_builder)
                                 })
-                                .map(|rtp_muxer_builder| rtp_muxer_builder.build());
+                                .and_then(RtpMuxer::from_builder);
 
                             match new_muxer {
                                 Ok(new_muxer) => {
@@ -218,7 +218,7 @@ impl Session {
                 packet = source_packet_rx.recv() => {
                     match packet {
                         Ok(packet) => {
-                            let (muxed, packet) = rtp_muxer::muxed(muxer, packet).await;
+                            let (muxed, packet) = muxer.muxed(packet).await;
                             muxer = muxed;
 
                             let (rtp_seq, rtp_timestamp) = muxer.seq_and_timestamp();
@@ -293,7 +293,7 @@ impl Session {
         tracing::trace!(%id, "finishing muxer");
         // Throw away possible last RTP buffer (we don't care about
         // it since this is real-time and there's no "trailer".
-        let _ = rtp_muxer::finish(muxer).await;
+        let _ = muxer.finish().await;
         tracing::trace!(%id, "finished muxer");
     }
 
