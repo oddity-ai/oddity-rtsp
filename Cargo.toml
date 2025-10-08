@@ -3,9 +3,9 @@ resolver = "2"
 members = ["oddity-rtsp-protocol", "oddity-rtsp-server", "oddity-sdp-protocol"]
 
 [workspace.dependencies]
-oddity-rtsp-protocol = { path = "oddity-rtsp-protocol", version = "0.1.0" }
-oddity-rtsp-server = { path = "oddity-rtsp-server", version = "0.1.0" }
-oddity-sdp-protocol = { path = "oddity-sdp-protocol", version = "0.1.0" }
+oddity-rtsp-protocol = { path = "oddity-rtsp-protocol", version = "0.2.0" }
+oddity-rtsp-server = { path = "oddity-rtsp-server", version = "0.2.0" }
+oddity-sdp-protocol = { path = "oddity-sdp-protocol", version = "0.2.0" }
 video-rs = "^0.10.5"
 
 [profile.release]
