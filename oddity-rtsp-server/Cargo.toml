@@ -11,7 +11,7 @@ config = { version = "=0.13.4", default-features = false, features = ["yaml"] }
 futures = "=0.3.31"
 oddity-rtsp-protocol = { workspace = true, features = ["tokio-codec"] }
 oddity-sdp-protocol = { workspace = true }
-rand = "=0.8.5"
+rand = "=0.8.6"
 serde = { version = "=1.0.228", features = ["derive"] }
 tokio = { version = "=1.47.1", features = ["full"] }
 tokio-stream = { version = "=0.1.17" }
