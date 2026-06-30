@@ -1074,7 +1074,6 @@ dkms.conf
 .vscode
 
 # Rust Lang
-Cargo.lock
 target/
 
 flake.lock
